@@ -39,10 +39,24 @@ object DayNames {
 
 object TimeFormat {
 
-    /** Accepts "9:00", "09:00", "9.00" and "0900" and returns zero-padded "HH:mm", or null. */
+    private val TWELVE_HOUR = Regex("^(\\d{1,2})(?:[:.]?(\\d{2}))?\\s*([AaPp])\\.?\\s*[Mm]?\\.?$")
+
+    /**
+     * Accepts "9:00 AM", "9 pm", "9:00", "09:00", "9.00" and "0900" and returns zero-padded
+     * 24-hour "HH:mm" (the stored format), or null when the text is not a time.
+     */
     fun normalize(raw: String?): String? {
-        val text = raw?.trim().orEmpty().replace('.', ':')
-        val match = Regex("^(\\d{1,2}):?(\\d{2})$").matchEntire(text) ?: return null
+        val text = raw?.trim().orEmpty()
+        TWELVE_HOUR.matchEntire(text)?.let { match ->
+            val hour12 = match.groupValues[1].toInt()
+            val minute = match.groupValues[2].ifEmpty { "0" }.toInt()
+            if (hour12 !in 1..12 || minute !in 0..59) return null
+            val pm = match.groupValues[3].equals("p", ignoreCase = true)
+            val hour24 = (hour12 % 12) + if (pm) 12 else 0
+            return String.format(Locale.US, "%02d:%02d", hour24, minute)
+        }
+        val plain = text.replace('.', ':')
+        val match = Regex("^(\\d{1,2}):?(\\d{2})$").matchEntire(plain) ?: return null
         val hour = match.groupValues[1].toInt()
         val minute = match.groupValues[2].toInt()
         if (hour !in 0..23 || minute !in 0..59) return null
@@ -54,7 +68,8 @@ object TimeFormat {
         return parts[0].toInt() * 60 + parts[1].toInt()
     }
 
-    fun range(session: ClassSession): String = "${session.startTime} — ${session.endTime}"
+    fun range(session: ClassSession): String =
+        "${clock12(session.startTime)} — ${clock12(session.endTime)}"
 
     fun duration(minutes: Int): String {
         val safe = minutes.coerceAtLeast(0)
@@ -76,4 +91,20 @@ object TimeFormat {
         }
         return String.format(Locale.US, "%02d:%02d %s", hour12, minute, suffix)
     }
+}
+
+/** Course codes are compared without case, spaces or hyphens, so "CSE 2101" matches "cse-2101". */
+object CourseCodes {
+    fun key(code: String): String = code.filter { it.isLetterOrDigit() }.uppercase()
+
+    /** Prints a code as LETTERS-DIGITS, for example CSE-2101. */
+    fun pretty(code: String): String {
+        val trimmed = code.trim().uppercase()
+        val match = Regex("^([A-Z]+)[\\s-]*(\\d.*)$").matchEntire(trimmed) ?: return trimmed
+        return match.groupValues[1] + "-" + match.groupValues[2].trim()
+    }
+}
+
+data class Course(val code: String, val title: String) {
+    val key: String get() = CourseCodes.key(code)
 }

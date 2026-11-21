@@ -21,11 +21,19 @@ class AppPreferences(context: Context) {
             prefs.edit().putBoolean(KEY_REMINDER_ENABLED, value).apply()
         }
 
+    /** 0 follows the system, 1 is always light, 2 is always dark. */
+    var widgetTheme: Int
+        get() = prefs.getInt(KEY_WIDGET_THEME, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_WIDGET_THEME, value).apply()
+        }
+
     companion object {
         const val DEFAULT_LEAD_MINUTES = 30
         val LEAD_OPTIONS = listOf(15, 30, 45)
 
         private const val FILE = "nextclass_prefs"
+        private const val KEY_WIDGET_THEME = "widget_theme"
         private const val KEY_LEAD_MINUTES = "lead_minutes"
         private const val KEY_REMINDER_ENABLED = "first_class_reminder_enabled"
     }

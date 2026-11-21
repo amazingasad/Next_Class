@@ -1,6 +1,7 @@
 package com.example.nextclass.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,10 +66,18 @@ fun SettingsScreen(
     onRemindersEnabled: (Boolean) -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestExactAlarms: () -> Unit,
+    message: String?,
+    onDismissMessage: () -> Unit,
+    onWidgetTheme: (Int) -> Unit,
+    onShare: () -> Unit,
+    onExportBackup: () -> Unit,
+    onRestoreBackup: () -> Unit,
+    onImportShared: (String) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var keyText by rememberSaveable { mutableStateOf("") }
     var keyVisible by rememberSaveable { mutableStateOf(false) }
+    var sharedText by rememberSaveable { mutableStateOf("") }
 
     Column(
         Modifier
@@ -220,6 +229,88 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f),
                     )
                 }
+            }
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
+            // ---- Widget theme ----
+            MicroLabel("Widget theme")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                listOf("Auto" to 0, "Light" to 1, "Dark" to 2).forEach { (label, mode) ->
+                    SelectPill(
+                        label = label,
+                        selected = state.widgetTheme == mode,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onWidgetTheme(mode)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Text(
+                text = "Auto follows your phone. For a smaller one-row widget, add NextClass (compact) from your widget list.",
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
+            // ---- Share and backup ----
+            MicroLabel("Share and backup")
+            Text(
+                text = "Send your routine and course titles to a friend, or keep a backup file before changing phones.",
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
+            SecondaryButton(
+                text = "Share my routine",
+                onClick = onShare,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SecondaryButton(
+                    text = "Save backup",
+                    onClick = onExportBackup,
+                    modifier = Modifier.weight(1f),
+                )
+                SecondaryButton(
+                    text = "Restore",
+                    onClick = onRestoreBackup,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            NcTextField(
+                value = sharedText,
+                onValueChange = { sharedText = it },
+                label = "Shared routine",
+                placeholder = "Paste the message here",
+            )
+            PrimaryButton(
+                text = "Import shared routine",
+                onClick = {
+                    onImportShared(sharedText)
+                    sharedText = ""
+                },
+                enabled = sharedText.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Importing replaces the routine on this phone.",
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
+            if (message != null) {
+                Text(
+                    text = message,
+                    style = NcText.Body,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onDismissMessage),
+                )
             }
 
             Spacer(Modifier.height(4.dp))

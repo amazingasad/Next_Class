@@ -3,6 +3,7 @@ package com.example.nextclass.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -39,7 +40,8 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.example.nextclass.MainActivity
 import com.example.nextclass.data.local.AppDatabase
-import com.example.nextclass.data.local.toDomain
+import com.example.nextclass.data.local.AppPreferences
+import com.example.nextclass.data.local.effectiveSessions
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.NextClassState
 import com.example.nextclass.domain.model.TimeFormat
@@ -63,10 +65,12 @@ class NextClassWidget : GlanceAppWidget() {
         val rows: List<ClassSession>,
         val nowMinutes: Int,
         val focusId: Long?,
+        val themeMode: Int,
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val sessions = AppDatabase.getInstance(context).routineDao().getAll().map { it.toDomain() }
+        val sessions = AppDatabase.getInstance(context).routineDao().effectiveSessions()
+        val themeMode = AppPreferences(context).widgetTheme
         val now = LocalDateTime.now()
         val state = GetCurrentOrNextClassUseCase().invoke(sessions, now)
         val nowMinutes = now.hour * 60 + now.minute
@@ -78,6 +82,7 @@ class NextClassWidget : GlanceAppWidget() {
                     .sortedWith(compareBy({ it.startMinutes }, { it.endMinutes })),
                 nowMinutes = nowMinutes,
                 focusId = state.focusSession?.id,
+                themeMode = themeMode,
             )
             is NextClassState.NextDayPreview -> Model(
                 state = state,
@@ -85,8 +90,9 @@ class NextClassWidget : GlanceAppWidget() {
                     .sortedWith(compareBy({ it.startMinutes }, { it.endMinutes })),
                 nowMinutes = -1,
                 focusId = state.firstSession.id,
+                themeMode = themeMode,
             )
-            NextClassState.NoClasses -> Model(state, emptyList(), nowMinutes, null)
+            NextClassState.NoClasses -> Model(state, emptyList(), nowMinutes, null, themeMode)
         }
         provideContent { WidgetContent(model) }
     }
@@ -101,13 +107,14 @@ class NextClassWidget : GlanceAppWidget() {
     private fun WidgetContent(model: Model) {
         val wide = LocalSize.current.width >= WIDE_BREAKPOINT
         val live = model.state is NextClassState.Ongoing
+        val p = remember(model.themeMode) { WidgetPalette(model.themeMode) }
         val openApp = actionStartActivity(Intent(LocalContext.current, MainActivity::class.java))
 
         // Outer box paints the 1dp hairline, inner box paints the surface.
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(Palette.hairline)
+                .background(p.hairline)
                 .cornerRadius(20.dp)
                 .padding(1.dp)
                 .clickable(openApp),
@@ -115,7 +122,7 @@ class NextClassWidget : GlanceAppWidget() {
             Box(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .background(Palette.surface)
+                    .background(p.surface)
                     .cornerRadius(19.dp)
                     .padding(top = 12.dp, start = 10.dp, end = 10.dp, bottom = 6.dp),
             ) {
@@ -127,7 +134,7 @@ class NextClassWidget : GlanceAppWidget() {
                         Box(
                             modifier = GlanceModifier
                                 .size(6.dp)
-                                .background(if (live) Palette.vermilion else Palette.sage)
+                                .background(if (live) p.vermilion else p.sage)
                                 .cornerRadius(3.dp),
                         ) {}
                         Spacer(modifier = GlanceModifier.width(6.dp))
@@ -135,7 +142,7 @@ class NextClassWidget : GlanceAppWidget() {
                             text = model.state.statusLabel,
                             maxLines = 1,
                             style = TextStyle(
-                                color = if (live) Palette.vermilionText else Palette.muted,
+                                color = if (live) p.vermilionText else p.muted,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
@@ -150,7 +157,7 @@ class NextClassWidget : GlanceAppWidget() {
                                 text = "Nothing scheduled",
                                 maxLines = 1,
                                 style = TextStyle(
-                                    color = Palette.ink,
+                                    color = p.ink,
                                     fontSize = if (wide) 20.sp else 16.sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
@@ -159,7 +166,7 @@ class NextClassWidget : GlanceAppWidget() {
                             Text(
                                 text = "Import a routine in NextClass",
                                 maxLines = 1,
-                                style = TextStyle(color = Palette.muted, fontSize = 12.sp),
+                                style = TextStyle(color = p.muted, fontSize = 12.sp),
                             )
                         }
                     } else {
@@ -171,6 +178,7 @@ class NextClassWidget : GlanceAppWidget() {
                                     focus = session.id == model.focusId,
                                     ongoing = live && session.id == model.focusId,
                                     wide = wide,
+                                    p = p,
                                 )
                             }
                         }
@@ -187,10 +195,11 @@ class NextClassWidget : GlanceAppWidget() {
         focus: Boolean,
         ongoing: Boolean,
         wide: Boolean,
+        p: WidgetPalette,
     ) {
-        val primary = if (past) Palette.inkFaded else Palette.ink
-        val secondary = if (past) Palette.mutedFaded else Palette.muted
-        val rowBackground = if (focus) Palette.focusTint else Palette.clear
+        val primary = if (past) p.inkFaded else p.ink
+        val secondary = if (past) p.mutedFaded else p.muted
+        val rowBackground = if (focus) p.focusTint else p.clear
 
         Row(
             modifier = GlanceModifier
@@ -209,22 +218,22 @@ class NextClassWidget : GlanceAppWidget() {
                     modifier = GlanceModifier
                         .width(3.dp)
                         .height(if (focus) 30.dp else 0.dp)
-                        .background(Palette.vermilion)
+                        .background(p.vermilion)
                         .cornerRadius(2.dp),
                 ) {}
                 if (focus) Spacer(modifier = GlanceModifier.width(8.dp))
 
                 Text(
-                    text = session.startTime,
+                    text = TimeFormat.clock12(session.startTime),
                     maxLines = 1,
                     style = TextStyle(
-                        color = if (focus) Palette.vermilionText else secondary,
+                        color = if (focus) p.vermilionText else secondary,
                         fontSize = 12.sp,
                         fontWeight = if (focus) FontWeight.Bold else FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
                     ),
                 )
-                Spacer(modifier = GlanceModifier.width(10.dp))
+                Spacer(modifier = GlanceModifier.width(8.dp))
 
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     if (focus) {
@@ -232,7 +241,7 @@ class NextClassWidget : GlanceAppWidget() {
                             text = if (ongoing) "NOW" else "NEXT",
                             maxLines = 1,
                             style = TextStyle(
-                                color = Palette.vermilionText,
+                                color = p.vermilionText,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                             ),
@@ -270,19 +279,4 @@ class NextClassWidget : GlanceAppWidget() {
             }
         }
     }
-}
-
-/** Day/night aware colors. Vermilion is reserved for the live and highlighted state. */
-private object Palette {
-    val surface = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF18181B))
-    val hairline = ColorProvider(day = Color(0xFFDADAD6), night = Color(0xFF34343A))
-    val ink = ColorProvider(day = Color(0xFF111113), night = Color(0xFFF4F4F2))
-    val muted = ColorProvider(day = Color(0xFF6B6B66), night = Color(0xFFA1A1A8))
-    val inkFaded = ColorProvider(day = Color(0x66111113), night = Color(0x66F4F4F2))
-    val mutedFaded = ColorProvider(day = Color(0x556B6B66), night = Color(0x55A1A1A8))
-    val sage = ColorProvider(day = Color(0xFF5E7568), night = Color(0xFF8FA89A))
-    val vermilion = ColorProvider(day = Color(0xFFEA580C), night = Color(0xFFEA580C))
-    val vermilionText = ColorProvider(day = Color(0xFFC2410C), night = Color(0xFFFB7A3A))
-    val focusTint = ColorProvider(day = Color(0x14EA580C), night = Color(0x26EA580C))
-    val clear = ColorProvider(day = Color(0x00000000), night = Color(0x00000000))
 }

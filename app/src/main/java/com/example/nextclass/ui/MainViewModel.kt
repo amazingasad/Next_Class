@@ -7,10 +7,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.nextclass.data.local.ApiKeyManager
 import com.example.nextclass.data.local.AppDatabase
 import com.example.nextclass.data.local.AppPreferences
+import com.example.nextclass.data.local.RoutineCodec
+import com.example.nextclass.data.local.RoutineBundle
 import com.example.nextclass.data.local.toDomain
 import com.example.nextclass.data.local.toEntity
 import com.example.nextclass.data.remote.RoutineParserRepository
+import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.Course
+import com.example.nextclass.domain.model.CourseCodes
+import com.example.nextclass.domain.model.RoutineOverrides
 import com.example.nextclass.domain.model.NextClassState
 import com.example.nextclass.domain.usecase.GetCurrentOrNextClassUseCase
 import com.example.nextclass.widget.WidgetUpdateHelper
@@ -27,6 +33,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -35,6 +42,13 @@ sealed interface ImportUiState {
     data object Scanning : ImportUiState
     data class Review(val sessions: List<ClassSession>) : ImportUiState
     data class Failed(val message: String) : ImportUiState
+}
+
+sealed interface CourseScanState {
+    data object Idle : CourseScanState
+    data object Scanning : CourseScanState
+    data class Done(val count: Int) : CourseScanState
+    data class Failed(val message: String) : CourseScanState
 }
 
 sealed interface VerifyState {
@@ -49,6 +63,7 @@ data class SettingsUiState(
     val leadMinutes: Int = AppPreferences.DEFAULT_LEAD_MINUTES,
     val remindersEnabled: Boolean = true,
     val verify: VerifyState = VerifyState.Idle,
+    val widgetTheme: Int = 0,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -72,8 +87,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LocalDateTime.now())
 
-    val hero: StateFlow<NextClassState> = combine(sessions, now) { list, time ->
-        if (list == null) NextClassState.NoClasses else resolver(list, time)
+    /** One-day changes (cancelled classes, room swaps) from yesterday onward. */
+    val overrides: StateFlow<List<ClassOverride>> = dao
+        .observeOverrides(LocalDate.now().minusDays(1).toString())
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val courses: StateFlow<List<Course>> = dao.observeCourses()
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val hero: StateFlow<NextClassState> = combine(sessions, overrides, now) { list, changes, time ->
+        if (list == null) {
+            NextClassState.NoClasses
+        } else {
+            resolver(RoutineOverrides.effective(list, changes, time.toLocalDate()), time)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NextClassState.NoClasses)
 
     private val _selectedDay = MutableStateFlow(LocalDate.now().dayOfWeek.value)
@@ -83,6 +112,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SettingsUiState(
             leadMinutes = preferences.leadMinutes,
             remindersEnabled = preferences.firstClassReminderEnabled,
+            widgetTheme = preferences.widgetTheme,
         ),
     )
     val settings: StateFlow<SettingsUiState> = _settings.asStateFlow()
@@ -90,6 +120,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _import = MutableStateFlow<ImportUiState>(ImportUiState.Idle)
     val importState: StateFlow<ImportUiState> = _import.asStateFlow()
 
+    private val _courseScan = MutableStateFlow<CourseScanState>(CourseScanState.Idle)
+    val courseScan: StateFlow<CourseScanState> = _courseScan.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    private var courseJob: Job? = null
     private var scanJob: Job? = null
     private var nextDraftId = 1L
 
@@ -116,6 +153,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteSession(id: Long) {
         viewModelScope.launch {
             dao.deleteById(id)
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    fun setCancelled(session: ClassSession, date: LocalDate, cancelled: Boolean) {
+        saveOverride(session, date) { it.copy(cancelled = cancelled) }
+    }
+
+    fun setRoomForDate(session: ClassSession, date: LocalDate, room: String) {
+        saveOverride(session, date) { it.copy(room = room, cancelled = false) }
+    }
+
+    fun resetOverride(session: ClassSession, date: LocalDate) {
+        viewModelScope.launch {
+            dao.deleteOverride(session.id, date.toString())
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    private fun saveOverride(
+        session: ClassSession,
+        date: LocalDate,
+        change: (ClassOverride) -> ClassOverride,
+    ) {
+        viewModelScope.launch {
+            val dateText = date.toString()
+            val current = overrides.value.firstOrNull { it.sessionId == session.id && it.date == dateText }
+                ?: ClassOverride(sessionId = session.id, date = dateText, cancelled = false, room = "")
+            val updated = change(current)
+            if (!updated.cancelled && updated.room.isBlank()) {
+                dao.deleteOverride(session.id, dateText)
+            } else {
+                dao.upsertOverride(updated.toEntity())
+            }
             WidgetUpdateHelper.refreshAll(getApplication())
         }
     }
@@ -168,6 +239,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (draft.isEmpty()) return
         viewModelScope.launch {
             dao.replaceAll(draft.map { it.copy(id = 0L).toEntity() })
+            applyCourseTitles()
             WidgetUpdateHelper.refreshAll(getApplication())
             _import.value = ImportUiState.Idle
             onDone()
@@ -223,5 +295,144 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferences.firstClassReminderEnabled = enabled
         _settings.update { it.copy(remindersEnabled = enabled) }
         refreshSchedule()
+    }
+
+    fun setWidgetTheme(mode: Int) {
+        preferences.widgetTheme = mode
+        _settings.update { it.copy(widgetTheme = mode) }
+        viewModelScope.launch { WidgetUpdateHelper.updateWidgets(getApplication()) }
+    }
+
+    // ---- Courses -----------------------------------------------------------------------
+
+    fun scanCourses(uri: Uri) {
+        courseJob?.cancel()
+        _courseScan.value = CourseScanState.Scanning
+        courseJob = viewModelScope.launch {
+            repository.scanCourses(uri).fold(
+                onSuccess = { list ->
+                    if (list.isEmpty()) {
+                        _courseScan.value = CourseScanState.Failed("No courses were found in that file.")
+                    } else {
+                        dao.upsertCourses(list.map { it.toEntity() })
+                        applyCourseTitles()
+                        WidgetUpdateHelper.refreshAll(getApplication())
+                        _courseScan.value = CourseScanState.Done(list.size)
+                    }
+                },
+                onFailure = { error ->
+                    _courseScan.value = CourseScanState.Failed(error.message ?: "Could not read the course list.")
+                },
+            )
+        }
+    }
+
+    fun clearCourseScan() {
+        courseJob?.cancel()
+        _courseScan.value = CourseScanState.Idle
+    }
+
+    fun addCourse(code: String, title: String) {
+        if (CourseCodes.key(code).isEmpty() || title.isBlank()) return
+        viewModelScope.launch {
+            dao.upsertCourses(listOf(Course(CourseCodes.pretty(code), title.trim()).toEntity()))
+            applyCourseTitles()
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    fun deleteCourse(course: Course) {
+        viewModelScope.launch { dao.deleteCourse(course.key) }
+    }
+
+    /** Course titles from the course list fill in every class with a matching code. */
+    private suspend fun applyCourseTitles() {
+        val titles = dao.getCourses().associate { it.codeKey to it.title }
+        if (titles.isEmpty()) return
+        dao.getAll().forEach { row ->
+            val title = titles[CourseCodes.key(row.courseCode)] ?: return@forEach
+            if (title.isNotBlank() && title != row.courseTitle) {
+                dao.upsert(row.copy(courseTitle = title))
+            }
+        }
+    }
+
+    // ---- Share and backup --------------------------------------------------------------
+
+    fun dismissMessage() {
+        _message.value = null
+    }
+
+    private suspend fun currentBundle(): RoutineBundle = withContext(Dispatchers.IO) {
+        RoutineCodec.bundleOf(
+            dao.getAll().map { it.toDomain() },
+            dao.getCourses().map { it.toDomain() },
+        )
+    }
+
+    fun prepareShare(onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val bundle = currentBundle()
+            if (bundle.sessions.isEmpty()) {
+                _message.value = "Nothing to share yet. Import a routine first."
+            } else {
+                onReady(RoutineCodec.shareMessage(bundle))
+            }
+        }
+    }
+
+    fun exportBackup(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val bundle = currentBundle()
+                val written = getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use {
+                    it.write(RoutineCodec.toBackupJson(bundle).toByteArray(Charsets.UTF_8))
+                    true
+                } ?: false
+                _message.value = if (written) "Backup saved." else "Could not save the backup."
+            } catch (e: Exception) {
+                _message.value = "Could not save the backup."
+            }
+        }
+    }
+
+    fun restoreBackup(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val text = try {
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use {
+                    it.readBytes().toString(Charsets.UTF_8)
+                }
+            } catch (e: Exception) {
+                null
+            }
+            if (text == null) {
+                _message.value = "Could not read that file."
+            } else {
+                applyShared(text)
+            }
+        }
+    }
+
+    fun importShared(text: String) {
+        viewModelScope.launch { applyShared(text) }
+    }
+
+    private suspend fun applyShared(text: String) {
+        val bundle = RoutineCodec.parse(text)
+        if (bundle == null || bundle.sessions.isEmpty()) {
+            _message.value = "That is not a NextClass routine."
+            return
+        }
+        withContext(Dispatchers.IO) {
+            dao.replaceAll(RoutineCodec.toSessions(bundle).map { it.toEntity() })
+            val courseList = RoutineCodec.toCourses(bundle)
+            if (courseList.isNotEmpty()) {
+                dao.clearCourses()
+                dao.upsertCourses(courseList.map { it.toEntity() })
+            }
+            applyCourseTitles()
+        }
+        WidgetUpdateHelper.refreshAll(getApplication())
+        _message.value = "Imported ${bundle.sessions.size} classes."
     }
 }

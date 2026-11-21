@@ -31,9 +31,9 @@ val NextClassState.focusSession: ClassSession?
 
 val NextClassState.statusLabel: String
     get() = when (this) {
-        is NextClassState.Ongoing -> "NOW • ENDS ${session.endTime}"
+        is NextClassState.Ongoing -> "NOW • ENDS ${TimeFormat.clock12(session.endTime)}"
         is NextClassState.Upcoming -> "NEXT • IN ${TimeFormat.duration(minutesUntilStart)}"
         is NextClassState.NextDayPreview ->
-            "${dayName.uppercase()} • ${firstSession.startTime}"
+            "${dayName.uppercase()} • ${TimeFormat.clock12(firstSession.startTime)}"
         NextClassState.NoClasses -> "NO CLASSES"
     }

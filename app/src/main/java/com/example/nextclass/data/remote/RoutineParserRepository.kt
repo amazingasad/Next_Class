@@ -12,6 +12,8 @@ import android.util.Base64
 import androidx.exifinterface.media.ExifInterface
 import com.example.nextclass.data.local.ApiKeyManager
 import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.Course
+import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.SessionType
 import com.example.nextclass.domain.model.TimeFormat
 import kotlinx.coroutines.CancellationException
@@ -150,6 +152,73 @@ class RoutineParserRepository(
         } catch (e: Exception) {
             Result.failure(ScanFailure("Unexpected error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(160)}"))
         }
+
+    /** Reads a photo or PDF of a course list (code and title per row). */
+    suspend fun scanCourses(uri: Uri): Result<List<Course>> =
+        try {
+            Result.success(doScanCourses(uri))
+        } catch (e: ScanFailure) {
+            Result.failure(e)
+        } catch (e: IOException) {
+            Result.failure(ScanFailure("Could not read that file."))
+        } catch (e: SecurityException) {
+            Result.failure(ScanFailure("This PDF is protected or cannot be opened."))
+        } catch (e: OutOfMemoryError) {
+            Result.failure(ScanFailure("That file is too large to process on this phone."))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(ScanFailure("Unexpected error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(160)}"))
+        }
+
+    private suspend fun doScanCourses(uri: Uri): List<Course> {
+        val apiKey = withContext(Dispatchers.IO) { keyManager.getKey() }
+        if (apiKey.isBlank()) throw ScanFailure("Add your Gemini API key in Settings first.")
+
+        val pages = withContext(Dispatchers.IO) { loadPages(uri) }
+        if (pages.isEmpty()) throw ScanFailure("No readable pages found in that file.")
+
+        val userParts = buildList {
+            add(PartDto(text = "Extract every course code and course title from this list."))
+            pages.forEach { add(PartDto(inlineData = InlineDataDto(mimeType = "image/jpeg", data = it))) }
+        }
+        val request = GenerateContentRequest(
+            systemInstruction = ContentDto(parts = listOf(PartDto(text = COURSE_INSTRUCTION))),
+            contents = listOf(ContentDto(role = "user", parts = userParts)),
+            generationConfig = GenerationConfigDto(
+                responseMimeType = "application/json",
+                responseSchema = COURSE_SCHEMA,
+                temperature = 0.0,
+            ),
+        )
+        val payloadChars = userParts.sumOf { (it.inlineData?.data?.length ?: 0) + (it.text?.length ?: 0) }
+        if (payloadChars > MAX_PAYLOAD_CHARS) {
+            throw ScanFailure("That file is too large to send. Use a smaller image or fewer pages.")
+        }
+
+        val models = candidateModels(apiKey)
+        val text = try {
+            generateWithFallback(apiKey, models, request)
+        } catch (e: ScanFailure) {
+            throw ScanFailure(e.message.orEmpty() + "\n\n" + diagnose(apiKey))
+        }
+        return parseCourses(text)
+    }
+
+    private fun parseCourses(raw: String): List<Course> {
+        val start = raw.indexOf('[')
+        val end = raw.lastIndexOf(']')
+        if (start < 0 || end <= start) throw ScanFailure("Gemini did not return a course list.")
+        val rows = try {
+            json.decodeFromString(ListSerializer(ParsedCourseDto.serializer()), raw.substring(start, end + 1))
+        } catch (e: SerializationException) {
+            throw ScanFailure("Gemini sent a course list the app could not read.")
+        }
+        return rows
+            .filter { CourseCodes.key(it.courseCode).isNotEmpty() && it.courseTitle.isNotBlank() }
+            .map { Course(code = CourseCodes.pretty(it.courseCode), title = it.courseTitle.trim()) }
+            .distinctBy { it.key }
+    }
 
     private suspend fun doScan(uri: Uri, sectionFilter: String): List<ClassSession> {
         val apiKey = withContext(Dispatchers.IO) { keyManager.getKey() }
@@ -496,6 +565,27 @@ class RoutineParserRepository(
                 "When a section or group is requested, return only sessions for that section or group " +
                 "plus sessions shared by all sections. " +
                 "Never invent sessions. If nothing is readable, return []."
+
+        const val COURSE_INSTRUCTION =
+            "You read lists of university courses from images and return structured JSON. " +
+                "Return only a JSON array. Each item has courseCode and courseTitle. " +
+                "courseCode is uppercase letters, a hyphen, then the number, for example CSE-2101 " +
+                "(write CSE 2101 or CSE2101 as CSE-2101). " +
+                "courseTitle is the full course name exactly as printed, without credit hours, " +
+                "teacher names or prerequisites. " +
+                "Skip header rows, totals and empty rows. Never invent courses. If nothing is readable, return []."
+
+        val COURSE_SCHEMA = SchemaDto(
+            type = "ARRAY",
+            items = SchemaDto(
+                type = "OBJECT",
+                properties = mapOf(
+                    "courseCode" to SchemaDto(type = "STRING"),
+                    "courseTitle" to SchemaDto(type = "STRING"),
+                ),
+                required = listOf("courseCode", "courseTitle"),
+            ),
+        )
 
         val ROUTINE_SCHEMA = SchemaDto(
             type = "ARRAY",

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.Icon
@@ -35,9 +36,13 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.nextclass.R
+import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.DayNames
 import com.example.nextclass.domain.model.NextClassState
+import com.example.nextclass.domain.model.RoutineOverrides
+import com.example.nextclass.domain.model.TimeFormat
+import com.example.nextclass.ui.components.ClassActionSheet
 import com.example.nextclass.ui.components.EditSessionBottomSheet
 import com.example.nextclass.ui.components.Hairline
 import com.example.nextclass.ui.components.HeroNextClassCard
@@ -49,6 +54,7 @@ import com.example.nextclass.ui.components.SelectPill
 import com.example.nextclass.ui.components.TimelineSessionRow
 import com.example.nextclass.ui.theme.NcText
 import com.example.nextclass.ui.theme.NcTheme
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -58,6 +64,7 @@ private val DATE_LABEL: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d M
 @Composable
 fun HomeScreen(
     sessions: List<ClassSession>?,
+    overrides: List<ClassOverride>,
     hero: NextClassState,
     now: LocalDateTime,
     selectedDay: Int,
@@ -65,6 +72,10 @@ fun HomeScreen(
     onSelectDay: (Int) -> Unit,
     onImport: () -> Unit,
     onSettings: () -> Unit,
+    onCourses: () -> Unit,
+    onCancelledChange: (ClassSession, LocalDate, Boolean) -> Unit,
+    onRoomForDate: (ClassSession, LocalDate, String) -> Unit,
+    onResetOverride: (ClassSession, LocalDate) -> Unit,
     onSaveSession: (ClassSession) -> Unit,
     onDeleteSession: (Long) -> Unit,
     onRequestNotifications: () -> Unit,
@@ -72,6 +83,7 @@ fun HomeScreen(
     val haptic = LocalHapticFeedback.current
     var editing by remember { mutableStateOf<ClassSession?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var acting by remember { mutableStateOf<ClassSession?>(null) }
 
     val today = now.dayOfWeek.value
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -84,6 +96,7 @@ fun HomeScreen(
         TopBar(
             dateLabel = now.format(DATE_LABEL),
             onImport = onImport,
+            onCourses = onCourses,
             onSettings = onSettings,
         )
 
@@ -92,6 +105,8 @@ fun HomeScreen(
         val daySessions = sessions.filter { it.dayOfWeek == selectedDay }
             .sortedBy { it.startTime }
         val liveId = (hero as? NextClassState.Ongoing)?.session?.id
+        val selectedDate = RoutineOverrides.nextDate(selectedDay, now.toLocalDate())
+        val entries = buildDayEntries(daySessions, overrides, selectedDate)
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -183,7 +198,7 @@ fun HomeScreen(
                 }
             } else {
                 item(key = "header") {
-                    val count = daySessions.size
+                    val count = entries.count { it is DayEntry.Row && it.override?.cancelled != true }
                     MicroLabel(
                         text = "${DayNames.full(selectedDay)} • $count ${if (count == 1) "class" else "classes"}",
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -191,13 +206,30 @@ fun HomeScreen(
                     Hairline(Modifier.padding(horizontal = 20.dp))
                 }
 
-                items(daySessions, key = { it.id }) { session ->
-                    TimelineSessionRow(
-                        session = session,
-                        isLive = session.id == liveId,
-                        onClick = { editing = session },
-                    )
-                    Hairline(Modifier.padding(horizontal = 20.dp))
+                items(
+                    entries,
+                    key = { entry ->
+                        when (entry) {
+                            is DayEntry.Row -> "s${entry.session.id}"
+                            is DayEntry.Gap -> entry.key
+                        }
+                    },
+                ) { entry ->
+                    when (entry) {
+                        is DayEntry.Row -> {
+                            val cancelled = entry.override?.cancelled == true
+                            TimelineSessionRow(
+                                session = entry.session,
+                                isLive = entry.session.id == liveId,
+                                cancelled = cancelled,
+                                roomOverride = if (cancelled) null else entry.override?.room,
+                                onClick = { acting = entry.session },
+                            )
+                            Hairline(Modifier.padding(horizontal = 20.dp))
+                        }
+
+                        is DayEntry.Gap -> GapRow(entry.minutes)
+                    }
                 }
 
                 if (daySessions.isEmpty()) {
@@ -244,6 +276,33 @@ fun HomeScreen(
         )
     }
 
+    acting?.let { target ->
+        val actDate = RoutineOverrides.nextDate(target.dayOfWeek, now.toLocalDate())
+        val current = overrides.firstOrNull { it.sessionId == target.id && it.date == actDate.toString() }
+        ClassActionSheet(
+            session = target,
+            dateLabel = actDate.format(DATE_LABEL),
+            override = current,
+            onEdit = {
+                editing = target
+                acting = null
+            },
+            onCancelledChange = {
+                onCancelledChange(target, actDate, it)
+                acting = null
+            },
+            onRoomForDate = {
+                onRoomForDate(target, actDate, it)
+                acting = null
+            },
+            onReset = {
+                onResetOverride(target, actDate)
+                acting = null
+            },
+            onDismiss = { acting = null },
+        )
+    }
+
     if (creating) {
         EditSessionBottomSheet(
             initial = null,
@@ -258,10 +317,52 @@ fun HomeScreen(
     }
 }
 
+private sealed interface DayEntry {
+    data class Row(val session: ClassSession, val override: ClassOverride?) : DayEntry
+    data class Gap(val key: String, val minutes: Int) : DayEntry
+}
+
+private const val MIN_GAP_MINUTES = 20
+
+/** Rows for one day with a "free" gap inserted between classes that are far enough apart. */
+private fun buildDayEntries(
+    sessions: List<ClassSession>,
+    overrides: List<ClassOverride>,
+    date: LocalDate,
+): List<DayEntry> {
+    val dateText = date.toString()
+    val entries = ArrayList<DayEntry>()
+    var previousEnd: Int? = null
+    for (session in sessions) {
+        val override = overrides.firstOrNull { it.sessionId == session.id && it.date == dateText }
+        if (override?.cancelled != true) {
+            val before = previousEnd
+            if (before != null && session.startMinutes - before >= MIN_GAP_MINUTES) {
+                entries += DayEntry.Gap("gap-${session.id}", session.startMinutes - before)
+            }
+            previousEnd = maxOf(before ?: 0, session.endMinutes)
+        }
+        entries += DayEntry.Row(session, override)
+    }
+    return entries
+}
+
+@Composable
+private fun GapRow(minutes: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 100.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+    ) {
+        MicroLabel(text = "${TimeFormat.duration(minutes)} free")
+    }
+}
+
 @Composable
 private fun TopBar(
     dateLabel: String,
     onImport: () -> Unit,
+    onCourses: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Row(
@@ -284,6 +385,13 @@ private fun TopBar(
             Icon(
                 imageVector = Icons.Rounded.UploadFile,
                 contentDescription = stringResource(R.string.cd_import_routine),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        IconButton(onClick = onCourses) {
+            Icon(
+                imageVector = Icons.Rounded.Book,
+                contentDescription = stringResource(R.string.cd_courses),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }

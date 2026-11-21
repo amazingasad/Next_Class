@@ -90,3 +90,10 @@ data class ParsedSessionDto(
     val endTime: String,
     val type: String = "LECTURE",
 )
+
+/** One course row exactly as Gemini returns it for a course list. */
+@Serializable
+data class ParsedCourseDto(
+    val courseCode: String,
+    val courseTitle: String = "",
+)

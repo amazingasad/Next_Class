@@ -37,6 +37,44 @@ interface RoutineDao {
     @Transaction
     suspend fun replaceAll(sessions: List<ClassSessionEntity>) {
         clearAll()
+        clearOverrides()
         insertAll(sessions)
     }
+
+    // ---- One-day changes ----
+
+    @Query("SELECT * FROM class_overrides WHERE date >= :from")
+    fun observeOverrides(from: String): Flow<List<ClassOverrideEntity>>
+
+    @Query("SELECT * FROM class_overrides WHERE date >= :from")
+    suspend fun getOverrides(from: String): List<ClassOverrideEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertOverride(override: ClassOverrideEntity)
+
+    @Query("DELETE FROM class_overrides WHERE sessionId = :sessionId AND date = :date")
+    suspend fun deleteOverride(sessionId: Long, date: String)
+
+    @Query("DELETE FROM class_overrides WHERE date < :before")
+    suspend fun deleteOverridesBefore(before: String)
+
+    @Query("DELETE FROM class_overrides")
+    suspend fun clearOverrides()
+
+    // ---- Course list ----
+
+    @Query("SELECT * FROM courses ORDER BY code ASC")
+    fun observeCourses(): Flow<List<CourseEntity>>
+
+    @Query("SELECT * FROM courses")
+    suspend fun getCourses(): List<CourseEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCourses(courses: List<CourseEntity>)
+
+    @Query("DELETE FROM courses WHERE codeKey = :codeKey")
+    suspend fun deleteCourse(codeKey: String)
+
+    @Query("DELETE FROM courses")
+    suspend fun clearCourses()
 }

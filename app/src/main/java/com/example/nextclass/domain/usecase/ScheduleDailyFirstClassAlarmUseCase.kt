@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import com.example.nextclass.data.local.AppPreferences
 import com.example.nextclass.data.local.RoutineDao
-import com.example.nextclass.data.local.toDomain
+import com.example.nextclass.data.local.effectiveSessions
 import com.example.nextclass.worker.AlarmHelper
 import com.example.nextclass.worker.FirstClassNotificationReceiver
 import com.example.nextclass.worker.WidgetTransitionReceiver
@@ -30,7 +30,9 @@ class ScheduleDailyFirstClassAlarmUseCase(
 
         if (!preferences.firstClassReminderEnabled) return
 
-        val first = dao.getFirstClassOfDay(now.dayOfWeek.value)?.toDomain() ?: return
+        val first = dao.effectiveSessions(now.toLocalDate())
+            .filter { it.dayOfWeek == now.dayOfWeek.value }
+            .minByOrNull { it.startMinutes } ?: return
         val lead = preferences.leadMinutes
         val trigger = now.toLocalDate().atTime(first.startLocalTime).minusMinutes(lead.toLong())
         if (!trigger.isAfter(now)) return

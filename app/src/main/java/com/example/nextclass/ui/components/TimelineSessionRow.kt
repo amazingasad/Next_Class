@@ -15,9 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.TimeFormat
 import com.example.nextclass.ui.theme.NcText
 import com.example.nextclass.ui.theme.NcTheme
 
@@ -31,6 +33,8 @@ fun TimelineSessionRow(
     isLive: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    cancelled: Boolean = false,
+    roomOverride: String? = null,
 ) {
     val extras = NcTheme.extras
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -42,16 +46,16 @@ fun TimelineSessionRow(
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Column(Modifier.width(56.dp)) {
+        Column(Modifier.width(80.dp)) {
             Text(
-                text = session.startTime,
+                text = TimeFormat.clock12(session.startTime),
                 style = NcText.Time,
-                color = onSurface,
+                color = if (cancelled) extras.muted else onSurface,
                 maxLines = 1,
                 softWrap = false,
             )
             Text(
-                text = session.endTime,
+                text = TimeFormat.clock12(session.endTime),
                 style = NcText.Time,
                 color = extras.muted,
                 maxLines = 1,
@@ -63,8 +67,10 @@ fun TimelineSessionRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = session.courseCode,
-                    style = NcText.Title,
-                    color = onSurface,
+                    style = NcText.Title.copy(
+                        textDecoration = if (cancelled) TextDecoration.LineThrough else null,
+                    ),
+                    color = if (cancelled) extras.muted else onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -83,15 +89,22 @@ fun TimelineSessionRow(
                 )
             }
             Spacer(Modifier.height(4.dp))
-            MicroLabel(text = session.type.name)
+            MicroLabel(
+                text = when {
+                    cancelled -> "Cancelled"
+                    !roomOverride.isNullOrBlank() -> "Room changed \u2022 ${session.type.name}"
+                    else -> session.type.name
+                },
+                color = if (cancelled) extras.live else extras.muted,
+            )
         }
 
         Spacer(Modifier.width(12.dp))
 
         Text(
-            text = session.room,
+            text = if (!roomOverride.isNullOrBlank()) roomOverride else session.room,
             style = NcText.Time,
-            color = onSurface,
+            color = if (cancelled) extras.muted else onSurface,
             textAlign = TextAlign.End,
             maxLines = 1,
             softWrap = false,

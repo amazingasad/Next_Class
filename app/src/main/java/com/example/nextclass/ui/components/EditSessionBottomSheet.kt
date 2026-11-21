@@ -60,8 +60,8 @@ fun EditSessionBottomSheet(
     var code by rememberSaveable(initial?.id) { mutableStateOf(initial?.courseCode.orEmpty()) }
     var title by rememberSaveable(initial?.id) { mutableStateOf(initial?.courseTitle.orEmpty()) }
     var room by rememberSaveable(initial?.id) { mutableStateOf(initial?.room.orEmpty()) }
-    var start by rememberSaveable(initial?.id) { mutableStateOf(initial?.startTime ?: "09:00") }
-    var end by rememberSaveable(initial?.id) { mutableStateOf(initial?.endTime ?: "10:00") }
+    var start by rememberSaveable(initial?.id) { mutableStateOf(TimeFormat.clock12(initial?.startTime ?: "09:00")) }
+    var end by rememberSaveable(initial?.id) { mutableStateOf(TimeFormat.clock12(initial?.endTime ?: "10:00")) }
     var type by rememberSaveable(initial?.id) { mutableStateOf((initial?.type ?: SessionType.LECTURE).name) }
     var showErrors by rememberSaveable(initial?.id) { mutableStateOf(false) }
 
@@ -141,8 +141,8 @@ fun EditSessionBottomSheet(
                 NcTextField(
                     value = start,
                     onValueChange = { start = it },
-                    label = "Start (24h)",
-                    placeholder = "09:00",
+                    label = "Start (AM/PM)",
+                    placeholder = "09:00 AM",
                     keyboardType = KeyboardType.Text,
                     isError = showErrors && normalizedStart == null,
                     modifier = Modifier.weight(1f),
@@ -150,8 +150,8 @@ fun EditSessionBottomSheet(
                 NcTextField(
                     value = end,
                     onValueChange = { end = it },
-                    label = "End (24h)",
-                    placeholder = "10:50",
+                    label = "End (AM/PM)",
+                    placeholder = "10:50 AM",
                     keyboardType = KeyboardType.Text,
                     isError = showErrors && !timesOrdered,
                     modifier = Modifier.weight(1f),
@@ -174,7 +174,7 @@ fun EditSessionBottomSheet(
                 Text(
                     text = when {
                         code.isBlank() -> "Enter a course code."
-                        normalizedStart == null || normalizedEnd == null -> "Use 24-hour times such as 09:00."
+                        normalizedStart == null || normalizedEnd == null -> "Use times such as 09:00 AM or 2:30 PM."
                         else -> "End time must be after the start time."
                     },
                     style = NcText.Body,

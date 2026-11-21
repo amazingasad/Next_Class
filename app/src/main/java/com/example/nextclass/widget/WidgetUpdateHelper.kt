@@ -5,7 +5,7 @@ import android.content.Intent
 import androidx.glance.appwidget.updateAll
 import com.example.nextclass.data.local.AppDatabase
 import com.example.nextclass.data.local.AppPreferences
-import com.example.nextclass.data.local.toDomain
+import com.example.nextclass.data.local.effectiveSessions
 import com.example.nextclass.domain.usecase.GetCurrentOrNextClassUseCase
 import com.example.nextclass.domain.usecase.ScheduleDailyFirstClassAlarmUseCase
 import com.example.nextclass.worker.AlarmHelper
@@ -17,14 +17,16 @@ object WidgetUpdateHelper {
     /** Redraw the widget, arm the next state-change alarm, and refresh the daily reminder. */
     suspend fun refreshAll(context: Context) {
         val appContext = context.applicationContext
+        val dao = AppDatabase.getInstance(appContext).routineDao()
+        dao.deleteOverridesBefore(java.time.LocalDate.now().toString())
         updateWidgets(appContext)
         scheduleNextTransition(appContext)
-        val dao = AppDatabase.getInstance(appContext).routineDao()
         ScheduleDailyFirstClassAlarmUseCase(appContext, dao, AppPreferences(appContext)).invoke()
     }
 
     suspend fun updateWidgets(context: Context) {
         NextClassWidget().updateAll(context.applicationContext)
+        NextClassCompactWidget().updateAll(context.applicationContext)
     }
 
     /**
@@ -33,7 +35,7 @@ object WidgetUpdateHelper {
      */
     suspend fun scheduleNextTransition(context: Context, now: LocalDateTime = LocalDateTime.now()) {
         val appContext = context.applicationContext
-        val sessions = AppDatabase.getInstance(appContext).routineDao().getAll().map { it.toDomain() }
+        val sessions = AppDatabase.getInstance(appContext).routineDao().effectiveSessions()
         val useCase = GetCurrentOrNextClassUseCase()
         val state = useCase(sessions, now)
         val boundary = useCase.nextBoundary(state, now)

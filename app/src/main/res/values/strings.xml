@@ -2,10 +2,12 @@
 <resources>
     <string name="app_name">NextClass</string>
     <string name="widget_description">Your full class routine for today, with the next class highlighted</string>
+    <string name="widget_compact_description">A single row with only the current or next class</string>
     <string name="channel_first_class_name">First class of the day</string>
     <string name="channel_first_class_description">One reminder before your first class each day</string>
     <string name="cd_back">Back</string>
     <string name="cd_import_routine">Import routine</string>
+    <string name="cd_courses">Courses</string>
     <string name="cd_settings">Settings</string>
     <string name="cd_show_key">Show API key</string>
     <string name="cd_hide_key">Hide API key</string>

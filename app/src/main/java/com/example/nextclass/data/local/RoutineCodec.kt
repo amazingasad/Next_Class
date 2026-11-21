@@ -1,0 +1,133 @@
+package com.example.nextclass.data.local
+
+import android.util.Base64
+import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.Course
+import com.example.nextclass.domain.model.CourseCodes
+import com.example.nextclass.domain.model.SessionType
+import com.example.nextclass.domain.model.TimeFormat
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+
+@Serializable
+data class BundleSession(
+    val dayOfWeek: Int,
+    val courseCode: String,
+    val courseTitle: String = "",
+    val room: String = "",
+    val startTime: String,
+    val endTime: String,
+    val type: String = "LECTURE",
+)
+
+@Serializable
+data class BundleCourse(
+    val code: String,
+    val title: String = "",
+)
+
+@Serializable
+data class RoutineBundle(
+    val app: String = "nextclass",
+    val version: Int = 1,
+    val sessions: List<BundleSession> = emptyList(),
+    val courses: List<BundleCourse> = emptyList(),
+)
+
+/** Turns the routine into a backup file or a short share code, and back. */
+object RoutineCodec {
+
+    private const val SHARE_PREFIX = "NXC1:"
+    private val SHARE_PATTERN = Regex("NXC1:([A-Za-z0-9_-]+)")
+
+    private val compact = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val pretty = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
+
+    fun bundleOf(sessions: List<ClassSession>, courses: List<Course>): RoutineBundle = RoutineBundle(
+        sessions = sessions.map {
+            BundleSession(
+                dayOfWeek = it.dayOfWeek,
+                courseCode = it.courseCode,
+                courseTitle = it.courseTitle,
+                room = it.room,
+                startTime = it.startTime,
+                endTime = it.endTime,
+                type = it.type.name,
+            )
+        },
+        courses = courses.map { BundleCourse(code = it.code, title = it.title) },
+    )
+
+    fun toBackupJson(bundle: RoutineBundle): String = pretty.encodeToString(RoutineBundle.serializer(), bundle)
+
+    fun toShareCode(bundle: RoutineBundle): String {
+        val raw = compact.encodeToString(RoutineBundle.serializer(), bundle).toByteArray(Charsets.UTF_8)
+        val zipped = ByteArrayOutputStream().also { out ->
+            GZIPOutputStream(out).use { it.write(raw) }
+        }.toByteArray()
+        return SHARE_PREFIX + Base64.encodeToString(zipped, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
+    fun shareMessage(bundle: RoutineBundle): String =
+        "NextClass routine (${bundle.sessions.size} classes)\n" +
+            "Open NextClass, go to Settings, choose Import shared routine and paste this whole message.\n\n" +
+            toShareCode(bundle)
+
+    /** Reads either a backup file's text or a pasted share message. Returns null if it is neither. */
+    fun parse(text: String): RoutineBundle? {
+        val trimmed = text.trim()
+        val bundle = try {
+            if (trimmed.startsWith("{")) {
+                compact.decodeFromString(RoutineBundle.serializer(), trimmed)
+            } else {
+                val code = SHARE_PATTERN.find(trimmed)?.groupValues?.get(1) ?: return null
+                val zipped = Base64.decode(code, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+                val json = GZIPInputStream(ByteArrayInputStream(zipped)).use { it.readBytes() }
+                    .toString(Charsets.UTF_8)
+                compact.decodeFromString(RoutineBundle.serializer(), json)
+            }
+        } catch (e: Exception) {
+            return null
+        }
+        return sanitize(bundle)
+    }
+
+    /** Drops rows with impossible days or times so a damaged file cannot crash the widget. */
+    private fun sanitize(bundle: RoutineBundle): RoutineBundle {
+        val sessions = bundle.sessions.mapNotNull { row ->
+            val start = TimeFormat.normalize(row.startTime) ?: return@mapNotNull null
+            val end = TimeFormat.normalize(row.endTime) ?: return@mapNotNull null
+            if (row.dayOfWeek !in 1..7 || row.courseCode.isBlank()) return@mapNotNull null
+            if (TimeFormat.toMinutes(end) <= TimeFormat.toMinutes(start)) return@mapNotNull null
+            row.copy(
+                courseCode = row.courseCode.trim().uppercase(),
+                startTime = start,
+                endTime = end,
+                type = SessionType.fromRaw(row.type).name,
+            )
+        }
+        val courses = bundle.courses
+            .filter { it.code.isNotBlank() && CourseCodes.key(it.code).isNotEmpty() }
+            .map { it.copy(code = CourseCodes.pretty(it.code), title = it.title.trim()) }
+        return bundle.copy(sessions = sessions, courses = courses)
+    }
+
+    fun toSessions(bundle: RoutineBundle): List<ClassSession> = bundle.sessions.map {
+        ClassSession(
+            dayOfWeek = it.dayOfWeek,
+            courseCode = it.courseCode,
+            courseTitle = it.courseTitle,
+            room = it.room,
+            startTime = it.startTime,
+            endTime = it.endTime,
+            type = SessionType.fromRaw(it.type),
+        )
+    }
+
+    fun toCourses(bundle: RoutineBundle): List<Course> =
+        bundle.courses.map { Course(code = it.code, title = it.title) }
+}

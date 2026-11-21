@@ -25,13 +25,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.nextclass.ui.screens.CoursesScreen
 import com.example.nextclass.ui.screens.HomeScreen
 import com.example.nextclass.ui.screens.ImportRoutineScreen
 import com.example.nextclass.ui.screens.SettingsScreen
 import com.example.nextclass.worker.AlarmHelper
 import com.example.nextclass.worker.NotificationHelper
 
-private enum class Screen { HOME, IMPORT, SETTINGS }
+private enum class Screen { HOME, IMPORT, SETTINGS, COURSES }
 
 @Composable
 fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
@@ -39,6 +40,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
 
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    val overrides by viewModel.overrides.collectAsStateWithLifecycle()
+    val courses by viewModel.courses.collectAsStateWithLifecycle()
+    val courseScan by viewModel.courseScan.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
     val hero by viewModel.hero.collectAsStateWithLifecycle()
     val now by viewModel.now.collectAsStateWithLifecycle()
     val selectedDay by viewModel.selectedDay.collectAsStateWithLifecycle()
@@ -75,6 +80,21 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri -> if (uri != null) viewModel.exportBackup(uri) }
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.restoreBackup(uri) }
+    val shareRoutine: () -> Unit = {
+        viewModel.prepareShare { text ->
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, text)
+            context.startActivity(Intent.createChooser(send, "Share routine"))
+        }
+    }
+
     val leaveImport = {
         viewModel.resetImport()
         screen = Screen.HOME
@@ -82,6 +102,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
     BackHandler(enabled = screen == Screen.IMPORT) { leaveImport() }
     BackHandler(enabled = screen == Screen.SETTINGS) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.COURSES) {
+        viewModel.clearCourseScan()
+        screen = Screen.HOME
+    }
 
     AnimatedContent(
         targetState = screen,
@@ -91,6 +115,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
         when (target) {
             Screen.HOME -> HomeScreen(
                 sessions = sessions,
+                overrides = overrides,
                 hero = hero,
                 now = now,
                 selectedDay = selectedDay,
@@ -98,6 +123,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onSelectDay = viewModel::selectDay,
                 onImport = { screen = Screen.IMPORT },
                 onSettings = { screen = Screen.SETTINGS },
+                onCourses = { screen = Screen.COURSES },
+                onCancelledChange = viewModel::setCancelled,
+                onRoomForDate = viewModel::setRoomForDate,
+                onResetOverride = viewModel::resetOverride,
                 onSaveSession = viewModel::saveSession,
                 onDeleteSession = viewModel::deleteSession,
                 onRequestNotifications = requestNotifications,
@@ -128,6 +157,27 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onRemindersEnabled = viewModel::setRemindersEnabled,
                 onRequestNotifications = requestNotifications,
                 onRequestExactAlarms = requestExactAlarms,
+                message = message,
+                onDismissMessage = viewModel::dismissMessage,
+                onWidgetTheme = viewModel::setWidgetTheme,
+                onShare = shareRoutine,
+                onExportBackup = { exportLauncher.launch("nextclass-backup.json") },
+                onRestoreBackup = { restoreLauncher.launch(arrayOf("*/*")) },
+                onImportShared = viewModel::importShared,
+            )
+
+            Screen.COURSES -> CoursesScreen(
+                courses = courses,
+                scan = courseScan,
+                hasApiKey = settings.hasKey,
+                onBack = {
+                    viewModel.clearCourseScan()
+                    screen = Screen.HOME
+                },
+                onScan = viewModel::scanCourses,
+                onAdd = viewModel::addCourse,
+                onDelete = viewModel::deleteCourse,
+                onOpenSettings = { screen = Screen.SETTINGS },
             )
         }
     }
