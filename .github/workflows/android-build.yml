@@ -32,17 +32,28 @@ jobs:
       - name: Grant Execute Permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NEXTCLASS_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "NEXTCLASS_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build optimized release APK
+        env:
+          NEXTCLASS_KEYSTORE_PASSWORD: ${{ secrets.NEXTCLASS_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Name the APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk NextClass-debug.apk
+        run: cp app/build/outputs/apk/release/app-release.apk NextClass.apk
 
-      - name: Upload Debug APK Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NextClass-Debug-APK
-          path: NextClass-debug.apk
+          name: NextClass-APK
+          path: NextClass.apk
           retention-days: 30
 
       - name: Publish APK as a GitHub Release
@@ -51,7 +62,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="build-${{ github.run_number }}"
-          gh release create "$TAG" NextClass-debug.apk \
+          gh release create "$TAG" NextClass.apk \
             --title "NextClass build ${{ github.run_number }}" \
-            --notes "Debug APK built from commit ${GITHUB_SHA::7}." \
+            --notes "Optimized release APK built from commit ${GITHUB_SHA::7}." \
             --target "$GITHUB_SHA"

@@ -24,17 +24,26 @@ android {
             if (!storePath.isNullOrBlank()) {
                 storeFile = file(storePath)
                 storePassword = System.getenv("NEXTCLASS_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("NEXTCLASS_KEY_ALIAS")
+                keyAlias = System.getenv("NEXTCLASS_KEY_ALIAS") ?: "nextclass"
                 keyPassword = System.getenv("NEXTCLASS_KEY_PASSWORD")
+                    ?: System.getenv("NEXTCLASS_KEYSTORE_PASSWORD")
             }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            if (!System.getenv("NEXTCLASS_KEYSTORE_PATH").isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Uses the private release key when provided, otherwise the debug key so the APK still installs.
+            signingConfig = if (!System.getenv("NEXTCLASS_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }
