@@ -19,6 +19,10 @@ Built for a small private group of students. Each person brings their own free G
 - **One-day changes.** Tap a class on the home screen to cancel it for one date or use a different room that day. The widget, the hero card and the reminder follow the change, and it resets by itself afterwards.
 - **Free-time gaps.** Gaps of 20 minutes or more between classes show as `2H 10M FREE`.
 - **Course list.** Upload a photo or PDF of your course codes and titles. Titles are filled into every class with a matching code.
+- **Week overview.** A "This week" screen shows every day as a card. Today is outlined in vermilion, finished classes are faded, and tapping a day opens it on the home screen.
+- **Course titles in the widgets.** Both widgets show the course title under the course code.
+- **API key guide.** A step-by-step card guide (Settings, or the notice on Home) covers getting a free Gemini key, privacy, and troubleshooting.
+- **Smooth motion.** Screens slide and fade, cards and lists ease in, day pills and buttons animate, and help cards expand smoothly.
 - **Share and backup.** Share your routine as a code message for friends, save a backup file, and restore from a backup or a pasted code.
 - **One notification per day.** A single reminder for the first class of the day, with a configurable lead time (15, 30 or 45 minutes). No reminders for later classes.
 - **No background polling.** The widget refreshes through one exact alarm set for the next start or end time.
