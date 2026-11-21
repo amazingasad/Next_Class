@@ -13,6 +13,13 @@ Built for a small private group of students. Each person brings their own free G
   - the ongoing class, or the next one when nothing is running, is highlighted with a vermilion accent
   - classes that already finished are faded
   - once the last class is over, the widget shows the next scheduled day
+- **Compact widget.** A one-row widget, "NextClass (compact)", that shows only the ongoing or next class.
+- **Widget theme.** Follow the phone, or force light or dark, in Settings.
+- **12-hour time.** Times show as `09:00 AM` everywhere, and you can type times as `9:00 AM`, `2:30 pm` or `14:30`.
+- **One-day changes.** Tap a class on the home screen to cancel it for one date or use a different room that day. The widget, the hero card and the reminder follow the change, and it resets by itself afterwards.
+- **Free-time gaps.** Gaps of 20 minutes or more between classes show as `2H 10M FREE`.
+- **Course list.** Upload a photo or PDF of your course codes and titles. Titles are filled into every class with a matching code.
+- **Share and backup.** Share your routine as a code message for friends, save a backup file, and restore from a backup or a pasted code.
 - **One notification per day.** A single reminder for the first class of the day, with a configurable lead time (15, 30 or 45 minutes). No reminders for later classes.
 - **No background polling.** The widget refreshes through one exact alarm set for the next start or end time.
 - **Private by design.** The API key is stored with `EncryptedSharedPreferences` and never leaves the device except in requests to Google.
@@ -42,7 +49,7 @@ app/src/main/java/com/example/nextclass/
   data/local      Room entity, DAO, database, encrypted key storage, preferences
   data/remote     Gemini API service, DTOs, PDF/image parsing repository
   domain          Models, current-or-next-class resolver, daily alarm use case
-  ui              Theme, components, screens, ViewModel
+  ui              Theme, components, screens (home, import, courses, settings), ViewModel
   widget          Glance widget, receiver, update helper
   worker          Alarm helper, notification and boot receivers, daily worker
 ```
