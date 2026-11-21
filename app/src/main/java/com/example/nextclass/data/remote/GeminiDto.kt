@@ -76,6 +76,7 @@ data class ModelListResponse(
 @Serializable
 data class ModelDto(
     val name: String? = null,
+    val supportedGenerationMethods: List<String> = emptyList(),
 )
 
 /** One class object exactly as Gemini returns it under the strict response schema. */

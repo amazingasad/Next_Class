@@ -5,6 +5,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface GeminiApiService {
 
@@ -20,5 +21,6 @@ interface GeminiApiService {
     @GET("v1beta/models")
     suspend fun listModels(
         @Header("x-goog-api-key") apiKey: String,
+        @Query("pageSize") pageSize: Int,
     ): ModelListResponse
 }

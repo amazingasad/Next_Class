@@ -68,7 +68,7 @@ class RoutineParserRepository(
         val key = apiKey.trim()
         if (key.isEmpty()) return Result.failure(ScanFailure("Enter your API key first."))
         return try {
-            service.listModels(key)
+            service.listModels(key, 1000)
             Result.success(Unit)
         } catch (e: HttpException) {
             val message = when (e.code()) {
@@ -127,13 +127,44 @@ class RoutineParserRepository(
             throw ScanFailure("That file is too large to send. Use a smaller image or fewer pages.")
         }
 
-        val text = generateWithFallback(apiKey, request)
+        val models = candidateModels(apiKey)
+        val text = generateWithFallback(apiKey, models, request)
         return parseSessions(text)
     }
 
-    private suspend fun generateWithFallback(apiKey: String, request: GenerateContentRequest): String {
+    /**
+     * Asks Google which models this key can call and returns the best Flash models first, so the
+     * app keeps working when Google retires a model name. Falls back to a fixed list if the
+     * lookup fails.
+     */
+    private suspend fun candidateModels(apiKey: String): List<String> {
+        val listed = try {
+            service.listModels(apiKey, 1000).models
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val blocked = listOf("lite", "image", "tts", "live", "audio", "embedding", "thinking", "robotics", "computer", "customtools", "exp")
+        val usable = listed
+            .filter { "generateContent" in it.supportedGenerationMethods }
+            .mapNotNull { it.name?.removePrefix("models/") }
+            .filter { name -> name.startsWith("gemini") && "flash" in name && blocked.none { it in name } }
+            .distinct()
+        val versionOf = { name: String ->
+            Regex("gemini-(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+        }
+        val ranked = usable.sortedWith(
+            compareBy<String>({ if (it == "gemini-flash-latest") 0 else 1 }, { "preview" in it }, { -versionOf(it) }),
+        ).take(MAX_MODEL_ATTEMPTS)
+        return ranked.ifEmpty { FALLBACK_MODELS }
+    }
+
+    private suspend fun generateWithFallback(
+        apiKey: String,
+        models: List<String>,
+        request: GenerateContentRequest,
+    ): String {
         var lastError: ScanFailure? = null
-        for (model in MODELS) {
+        for (model in models) {
             try {
                 // Gemini 2.5 spends most of its time thinking; the extraction needs none.
                 val modelRequest = if (model.startsWith("gemini-2.5")) {
@@ -338,8 +369,9 @@ class RoutineParserRepository(
     private companion object {
         const val BASE_URL = "https://generativelanguage.googleapis.com/"
 
-        /** Primary model first, then the fallback the spec names. */
-        val MODELS = listOf("gemini-3.8-flash", "gemini-2.5-flash")
+        /** Used only when the model lookup fails. */
+        val FALLBACK_MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
+        const val MAX_MODEL_ATTEMPTS = 4
 
         const val RENDER_DPI = 200f
         const val MAX_EDGE_PX = 2600f
