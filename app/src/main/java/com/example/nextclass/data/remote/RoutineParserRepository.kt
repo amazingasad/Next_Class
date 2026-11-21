@@ -425,10 +425,11 @@ class RoutineParserRepository(
     private fun buildUserPrompt(sectionFilter: String): String {
         val filter = sectionFilter.trim()
         return if (filter.isEmpty()) {
-            "Extract every class session from this routine."
+            "Extract every class session from this routine, including each course title that is printed anywhere on the page."
         } else {
             "Extract the class sessions for this section/group only: \"$filter\". " +
-                "Skip rows that belong to other sections or groups."
+                "Skip rows that belong to other sections or groups. " +
+                "Include each course title that is printed anywhere on the page."
         }
     }
 
@@ -560,6 +561,9 @@ class RoutineParserRepository(
                 "Normalize rooms to a short form such as \"Room 304\" and keep lab names such as " +
                 "\"Physics Lab\". " +
                 "courseCode is uppercase with a hyphen, for example CSE-2101. " +
+                "courseTitle is the full course name. Read it from the cell itself, or from any course " +
+                "list, legend or key printed on the same page that matches the course code, and copy " +
+                "it exactly. Use an empty string only when no title for that course appears anywhere. " +
                 "type is LAB for lab, sessional or practical sessions, TUTORIAL for tutorials, and " +
                 "LECTURE otherwise. " +
                 "When a section or group is requested, return only sessions for that section or group " +

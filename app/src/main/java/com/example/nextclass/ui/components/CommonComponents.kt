@@ -1,6 +1,9 @@
 package com.example.nextclass.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +25,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,14 +88,30 @@ fun SelectPill(
 ) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
-    val foreground = if (selected) colors.surface else colors.onSurface
+    val background by animateColorAsState(
+        targetValue = if (selected) colors.onSurface else Color.Transparent,
+        animationSpec = tween(200),
+        label = "pillBackground",
+    )
+    val border by animateColorAsState(
+        targetValue = if (selected) Color.Transparent else NcTheme.extras.hairline,
+        animationSpec = tween(200),
+        label = "pillBorder",
+    )
+    val foreground by animateColorAsState(
+        targetValue = if (selected) colors.surface else colors.onSurface,
+        animationSpec = tween(200),
+        label = "pillText",
+    )
+    val source = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .height(44.dp)
+            .pressScale(source)
             .clip(shape)
-            .background(if (selected) colors.onSurface else Color.Transparent)
-            .then(if (selected) Modifier else Modifier.border(1.dp, NcTheme.extras.hairline, shape))
-            .clickable(onClick = onClick),
+            .background(background)
+            .border(1.dp, border, shape)
+            .clickable(interactionSource = source, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -120,10 +141,12 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val source = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(50.dp),
+        interactionSource = source,
+        modifier = modifier.height(50.dp).pressScale(source),
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
@@ -144,10 +167,12 @@ fun SecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val source = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(50.dp),
+        interactionSource = source,
+        modifier = modifier.height(50.dp).pressScale(source),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, NcTheme.extras.hairline),
         colors = ButtonDefaults.outlinedButtonColors(

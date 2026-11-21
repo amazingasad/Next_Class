@@ -73,6 +73,7 @@ fun SettingsScreen(
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
     onImportShared: (String) -> Unit,
+    onOpenGuide: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var keyText by rememberSaveable { mutableStateOf("") }
@@ -119,6 +120,11 @@ fun SettingsScreen(
                 text = "Each person uses their own free key from Google AI Studio. It is stored encrypted on this phone and sent only to Google.",
                 style = NcText.Body,
                 color = NcTheme.extras.muted,
+            )
+            SecondaryButton(
+                text = "Step-by-step key guide",
+                onClick = onOpenGuide,
+                modifier = Modifier.fillMaxWidth(),
             )
             if (state.hasKey) {
                 Text(

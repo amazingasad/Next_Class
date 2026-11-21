@@ -9,7 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -25,19 +28,26 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.nextclass.ui.screens.ApiKeyGuideScreen
 import com.example.nextclass.ui.screens.CoursesScreen
 import com.example.nextclass.ui.screens.HomeScreen
 import com.example.nextclass.ui.screens.ImportRoutineScreen
 import com.example.nextclass.ui.screens.SettingsScreen
+import com.example.nextclass.ui.screens.WeekScreen
 import com.example.nextclass.worker.AlarmHelper
 import com.example.nextclass.worker.NotificationHelper
 
-private enum class Screen { HOME, IMPORT, SETTINGS, COURSES }
+private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE }
 
 @Composable
 fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
+    var guideFrom by rememberSaveable { mutableStateOf(Screen.HOME) }
+    val openGuide: () -> Unit = {
+        guideFrom = screen
+        screen = Screen.GUIDE
+    }
 
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val overrides by viewModel.overrides.collectAsStateWithLifecycle()
@@ -102,6 +112,8 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
     BackHandler(enabled = screen == Screen.IMPORT) { leaveImport() }
     BackHandler(enabled = screen == Screen.SETTINGS) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.WEEK) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.GUIDE) { screen = guideFrom }
     BackHandler(enabled = screen == Screen.COURSES) {
         viewModel.clearCourseScan()
         screen = Screen.HOME
@@ -109,7 +121,18 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
     AnimatedContent(
         targetState = screen,
-        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(140)) },
+        transitionSpec = {
+            val forward = targetState != Screen.HOME
+            val enterOffset: (Int) -> Int = { width -> if (forward) width / 6 else -width / 8 }
+            val exitOffset: (Int) -> Int = { width -> if (forward) -width / 8 else width / 6 }
+            (
+                slideInHorizontally(tween(340, easing = FastOutSlowInEasing), enterOffset) +
+                    fadeIn(tween(280))
+                ) togetherWith (
+                slideOutHorizontally(tween(300, easing = FastOutSlowInEasing), exitOffset) +
+                    fadeOut(tween(200))
+                )
+        },
         label = "screen",
     ) { target ->
         when (target) {
@@ -124,6 +147,9 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onImport = { screen = Screen.IMPORT },
                 onSettings = { screen = Screen.SETTINGS },
                 onCourses = { screen = Screen.COURSES },
+                onWeek = { screen = Screen.WEEK },
+                hasApiKey = settings.hasKey,
+                onKeyGuide = openGuide,
                 onCancelledChange = viewModel::setCancelled,
                 onRoomForDate = viewModel::setRoomForDate,
                 onResetOverride = viewModel::resetOverride,
@@ -142,7 +168,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onDeleteDraft = viewModel::deleteDraft,
                 onSave = { viewModel.saveDraft { screen = Screen.HOME } },
                 onReset = viewModel::resetImport,
-                onOpenSettings = { screen = Screen.SETTINGS },
+                onOpenSettings = openGuide,
             )
 
             Screen.SETTINGS -> SettingsScreen(
@@ -164,6 +190,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onExportBackup = { exportLauncher.launch("nextclass-backup.json") },
                 onRestoreBackup = { restoreLauncher.launch(arrayOf("*/*")) },
                 onImportShared = viewModel::importShared,
+                onOpenGuide = openGuide,
             )
 
             Screen.COURSES -> CoursesScreen(
@@ -177,6 +204,23 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onScan = viewModel::scanCourses,
                 onAdd = viewModel::addCourse,
                 onDelete = viewModel::deleteCourse,
+                onOpenSettings = openGuide,
+            )
+
+            Screen.WEEK -> WeekScreen(
+                sessions = sessions,
+                overrides = overrides,
+                now = now,
+                onBack = { screen = Screen.HOME },
+                onOpenDay = { day ->
+                    viewModel.selectDay(day)
+                    screen = Screen.HOME
+                },
+            )
+
+            Screen.GUIDE -> ApiKeyGuideScreen(
+                hasKey = settings.hasKey,
+                onBack = { screen = guideFrom },
                 onOpenSettings = { screen = Screen.SETTINGS },
             )
         }

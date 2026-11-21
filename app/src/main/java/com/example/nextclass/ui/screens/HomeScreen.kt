@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Book
+import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.Icon
@@ -73,6 +74,9 @@ fun HomeScreen(
     onImport: () -> Unit,
     onSettings: () -> Unit,
     onCourses: () -> Unit,
+    onWeek: () -> Unit,
+    hasApiKey: Boolean,
+    onKeyGuide: () -> Unit,
     onCancelledChange: (ClassSession, LocalDate, Boolean) -> Unit,
     onRoomForDate: (ClassSession, LocalDate, String) -> Unit,
     onResetOverride: (ClassSession, LocalDate) -> Unit,
@@ -97,6 +101,7 @@ fun HomeScreen(
             dateLabel = now.format(DATE_LABEL),
             onImport = onImport,
             onCourses = onCourses,
+            onWeek = onWeek,
             onSettings = onSettings,
         )
 
@@ -117,6 +122,32 @@ fun HomeScreen(
                     state = hero,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
+            }
+
+            if (!hasApiKey) {
+                item(key = "key-notice") {
+                    Row(
+                        modifier = Modifier
+                            .animateItem()
+                            .fillMaxWidth()
+                            .clickable(onClick = onKeyGuide)
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Add a free Gemini key to import your routine.",
+                            style = NcText.Body,
+                            color = NcTheme.extras.muted,
+                            modifier = Modifier.weight(1f),
+                        )
+                        MicroLabel(
+                            text = "Guide",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                }
             }
 
             if (showNotificationNotice && sessions.isNotEmpty()) {
@@ -216,7 +247,7 @@ fun HomeScreen(
                     },
                 ) { entry ->
                     when (entry) {
-                        is DayEntry.Row -> {
+                        is DayEntry.Row -> Column(Modifier.animateItem()) {
                             val cancelled = entry.override?.cancelled == true
                             TimelineSessionRow(
                                 session = entry.session,
@@ -228,7 +259,7 @@ fun HomeScreen(
                             Hairline(Modifier.padding(horizontal = 20.dp))
                         }
 
-                        is DayEntry.Gap -> GapRow(entry.minutes)
+                        is DayEntry.Gap -> Column(Modifier.animateItem()) { GapRow(entry.minutes) }
                     }
                 }
 
@@ -363,6 +394,7 @@ private fun TopBar(
     dateLabel: String,
     onImport: () -> Unit,
     onCourses: () -> Unit,
+    onWeek: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Row(
@@ -385,6 +417,13 @@ private fun TopBar(
             Icon(
                 imageVector = Icons.Rounded.UploadFile,
                 contentDescription = stringResource(R.string.cd_import_routine),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        IconButton(onClick = onWeek) {
+            Icon(
+                imageVector = Icons.Rounded.CalendarViewWeek,
+                contentDescription = stringResource(R.string.cd_week),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }

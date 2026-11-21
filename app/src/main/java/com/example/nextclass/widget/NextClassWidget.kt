@@ -256,6 +256,13 @@ class NextClassWidget : GlanceAppWidget() {
                             fontWeight = if (focus) FontWeight.Bold else FontWeight.Medium,
                         ),
                     )
+                    if (session.courseTitle.isNotBlank()) {
+                        Text(
+                            text = session.courseTitle,
+                            maxLines = 1,
+                            style = TextStyle(color = secondary, fontSize = 11.sp),
+                        )
+                    }
                     Text(
                         text = session.room.uppercase(),
                         maxLines = 1,

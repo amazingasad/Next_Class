@@ -181,12 +181,12 @@ private fun PickStep(
 
         if (!hasApiKey) {
             Text(
-                text = "Add your Gemini API key in Settings before scanning.",
+                text = "Add a Gemini API key before scanning. The guide shows how to get one for free.",
                 style = NcText.Body,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             SecondaryButton(
-                text = "Open settings",
+                text = "How to get a key",
                 onClick = onOpenSettings,
                 modifier = Modifier.fillMaxWidth(),
             )

@@ -99,10 +99,17 @@ class NextClassCompactWidget : GlanceAppWidget() {
                         maxLines = 1,
                         style = TextStyle(
                             color = p.ink,
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                         ),
                     )
+                    if (session != null && session.courseTitle.isNotBlank()) {
+                        Text(
+                            text = session.courseTitle,
+                            maxLines = 1,
+                            style = TextStyle(color = p.muted, fontSize = 11.sp),
+                        )
+                    }
                 }
                 if (session != null) {
                     Spacer(modifier = GlanceModifier.width(8.dp))

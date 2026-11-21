@@ -115,12 +115,12 @@ fun CoursesScreen(
                         )
                     } else {
                         Text(
-                            text = "Add your Gemini API key in Settings to scan a course list.",
+                            text = "Add a Gemini API key to scan a course list. The guide shows how to get one for free.",
                             style = NcText.Body,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         PrimaryButton(
-                            text = "Open settings",
+                            text = "How to get a key",
                             onClick = onOpenSettings,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -172,7 +172,7 @@ fun CoursesScreen(
             }
 
             items(courses, key = { it.key }) { course ->
-                Column {
+                Column(Modifier.animateItem()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
