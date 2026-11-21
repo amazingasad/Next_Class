@@ -14,6 +14,7 @@ import com.example.nextclass.data.local.ApiKeyManager
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.SessionType
 import com.example.nextclass.domain.model.TimeFormat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -50,9 +51,10 @@ class RoutineParserRepository(
 
     private val service: GeminiApiService by lazy {
         val client = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(150, TimeUnit.SECONDS)
-            .writeTimeout(90, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(100, TimeUnit.SECONDS)
             .build()
         Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -93,11 +95,15 @@ class RoutineParserRepository(
             Result.failure(ScanFailure("This PDF is protected or cannot be opened."))
         } catch (e: OutOfMemoryError) {
             Result.failure(ScanFailure("That file is too large to process on this phone."))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(ScanFailure("Unexpected error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(160)}"))
         }
 
     private suspend fun doScan(uri: Uri, sectionFilter: String): List<ClassSession> {
         val apiKey = withContext(Dispatchers.IO) { keyManager.getKey() }
-            ?: throw ScanFailure("Add your Gemini API key in Settings first.")
+        if (apiKey.isBlank()) throw ScanFailure("Add your Gemini API key in Settings first.")
 
         val pages = withContext(Dispatchers.IO) { loadPages(uri) }
         if (pages.isEmpty()) throw ScanFailure("No readable pages found in that file.")
@@ -116,6 +122,11 @@ class RoutineParserRepository(
             ),
         )
 
+        val payloadBytes = userParts.sumOf { (it.inlineData?.data?.length ?: 0) + (it.text?.length ?: 0) }
+        if (payloadBytes > MAX_PAYLOAD_CHARS) {
+            throw ScanFailure("That file is too large to send. Use a smaller image or fewer pages.")
+        }
+
         val text = generateWithFallback(apiKey, request)
         return parseSessions(text)
     }
@@ -124,7 +135,17 @@ class RoutineParserRepository(
         var lastError: ScanFailure? = null
         for (model in MODELS) {
             try {
-                val response = service.generateContent(model, apiKey, request)
+                // Gemini 2.5 spends most of its time thinking; the extraction needs none.
+                val modelRequest = if (model.startsWith("gemini-2.5")) {
+                    request.copy(
+                        generationConfig = request.generationConfig?.copy(
+                            thinkingConfig = ThinkingConfigDto(thinkingBudget = 0),
+                        ),
+                    )
+                } else {
+                    request
+                }
+                val response = service.generateContent(model, apiKey, modelRequest)
                 response.promptFeedback?.blockReason?.let {
                     throw ScanFailure("Gemini declined to read this file ($it).")
                 }
@@ -144,9 +165,23 @@ class RoutineParserRepository(
                 if (keyRejected) {
                     throw ScanFailure("Your Gemini API key was rejected. Check it in Settings.")
                 }
-                lastError = ScanFailure("Gemini error (HTTP ${e.code()}) using $model.")
+                if (e.code() == 404) {
+                    lastError = ScanFailure("Model $model is not available for this key.")
+                    continue
+                }
+                val detail = Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1).orEmpty()
+                lastError = ScanFailure(
+                    "Gemini error (HTTP ${e.code()}) using $model." +
+                        if (detail.isNotBlank()) " ${detail.take(180)}" else "",
+                )
             } catch (e: IOException) {
-                lastError = ScanFailure("Network problem while contacting Gemini.")
+                lastError = ScanFailure(
+                    if (e is java.io.InterruptedIOException) {
+                        "Gemini took too long to answer. Try a smaller image or try again."
+                    } else {
+                        "Network problem while contacting Gemini."
+                    },
+                )
             } catch (e: SerializationException) {
                 lastError = ScanFailure("Gemini sent a reply the app could not read.")
             }
@@ -307,9 +342,10 @@ class RoutineParserRepository(
         val MODELS = listOf("gemini-3.8-flash", "gemini-2.5-flash")
 
         const val RENDER_DPI = 200f
-        const val MAX_EDGE_PX = 4000f
-        const val MAX_PDF_PAGES = 6
-        const val JPEG_QUALITY = 88
+        const val MAX_EDGE_PX = 2600f
+        const val MAX_PDF_PAGES = 4
+        const val JPEG_QUALITY = 80
+        const val MAX_PAYLOAD_CHARS = 14_000_000
 
         const val SYSTEM_INSTRUCTION =
             "You read university class routine timetables from images and return structured JSON. " +

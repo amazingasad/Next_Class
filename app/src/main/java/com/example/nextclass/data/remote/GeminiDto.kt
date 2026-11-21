@@ -33,6 +33,12 @@ data class GenerationConfigDto(
     val responseMimeType: String? = null,
     val responseSchema: SchemaDto? = null,
     val temperature: Double? = null,
+    val thinkingConfig: ThinkingConfigDto? = null,
+)
+
+@Serializable
+data class ThinkingConfigDto(
+    val thinkingBudget: Int,
 )
 
 @Serializable
