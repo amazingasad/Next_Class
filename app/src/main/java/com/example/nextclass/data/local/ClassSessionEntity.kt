@@ -15,18 +15,19 @@ data class ClassSessionEntity(
     val startTime: String,
     val endTime: String,
     val type: String
-) {
-    fun toDomain(): ClassSession = ClassSession(
-        id = id,
-        dayOfWeek = dayOfWeek,
-        courseCode = courseCode,
-        courseTitle = courseTitle,
-        room = room,
-        startTime = startTime,
-        endTime = endTime,
-        type = runCatching { SessionType.valueOf(type) }.getOrDefault(SessionType.LECTURE)
-    )
-}
+
+)
+
+fun ClassSessionEntity.toDomain(): ClassSession = ClassSession(
+    id = id,
+    dayOfWeek = dayOfWeek,
+    courseCode = courseCode,
+    courseTitle = courseTitle,
+    room = room,
+    startTime = startTime,
+    endTime = endTime,
+    type = SessionType.fromRaw(type),
+)
 
 fun ClassSession.toEntity(): ClassSessionEntity = ClassSessionEntity(
     id = id,

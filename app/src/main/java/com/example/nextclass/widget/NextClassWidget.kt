@@ -1,6 +1,7 @@
 package com.example.nextclass.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
@@ -8,6 +9,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -99,6 +101,7 @@ class NextClassWidget : GlanceAppWidget() {
     private fun WidgetContent(model: Model) {
         val wide = LocalSize.current.width >= WIDE_BREAKPOINT
         val live = model.state is NextClassState.Ongoing
+        val openApp = actionStartActivity(Intent(LocalContext.current, MainActivity::class.java))
 
         // Outer box paints the 1dp hairline, inner box paints the surface.
         Box(
@@ -107,7 +110,7 @@ class NextClassWidget : GlanceAppWidget() {
                 .background(Palette.hairline)
                 .cornerRadius(20.dp)
                 .padding(1.dp)
-                .clickable(actionStartActivity<MainActivity>()),
+                .clickable(openApp),
         ) {
             Box(
                 modifier = GlanceModifier
