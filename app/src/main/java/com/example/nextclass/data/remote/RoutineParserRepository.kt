@@ -80,9 +80,9 @@ class RoutineParserRepository(
                 .build(),
         )
         object : Dns {
-            override fun lookup(hostname: String): List<InetAddress> =
+            override fun lookup(hostname: String): List<InetAddress> {
                 try {
-                    Dns.SYSTEM.lookup(hostname)
+                    return Dns.SYSTEM.lookup(hostname)
                 } catch (original: UnknownHostException) {
                     for (backup in backups) {
                         try {
@@ -93,6 +93,7 @@ class RoutineParserRepository(
                     }
                     throw original
                 }
+            }
         }
     }
 
