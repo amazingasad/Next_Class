@@ -17,17 +17,23 @@ import com.example.nextclass.domain.model.TimeFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import okhttp3.Dns
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.dnsoverhttps.DnsOverHttps
 import okhttp3.OkHttpClient
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -49,6 +55,47 @@ class RoutineParserRepository(
         isLenient = true
     }
 
+    /**
+     * Uses the phone's DNS first. If that cannot find Google (Private DNS, ad blockers, a flaky
+     * ISP resolver), it asks Google and Cloudflare over HTTPS instead.
+     */
+    private val resilientDns: Dns by lazy {
+        val bootstrap = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()
+        val backups = listOf(
+            DnsOverHttps.Builder()
+                .client(bootstrap)
+                .url("https://dns.google/dns-query".toHttpUrl())
+                .bootstrapDnsHosts(
+                    InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)),
+                    InetAddress.getByAddress(byteArrayOf(8, 8, 4, 4)),
+                )
+                .build(),
+            DnsOverHttps.Builder()
+                .client(bootstrap)
+                .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
+                .bootstrapDnsHosts(
+                    InetAddress.getByAddress(byteArrayOf(1, 1, 1, 1)),
+                    InetAddress.getByAddress(byteArrayOf(1, 0, 0, 1)),
+                )
+                .build(),
+        )
+        object : Dns {
+            override fun lookup(hostname: String): List<InetAddress> =
+                try {
+                    Dns.SYSTEM.lookup(hostname)
+                } catch (original: UnknownHostException) {
+                    for (backup in backups) {
+                        try {
+                            return backup.lookup(hostname)
+                        } catch (ignored: Exception) {
+                            // try the next resolver
+                        }
+                    }
+                    throw original
+                }
+        }
+    }
+
     private val service: GeminiApiService by lazy {
         val client = OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -56,6 +103,7 @@ class RoutineParserRepository(
             .writeTimeout(60, TimeUnit.SECONDS)
             .callTimeout(120, TimeUnit.SECONDS)
             .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .dns(resilientDns)
             .build()
         Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -129,8 +177,57 @@ class RoutineParserRepository(
         }
 
         val models = candidateModels(apiKey)
-        val text = generateWithFallback(apiKey, models, request)
+        val text = try {
+            generateWithFallback(apiKey, models, request)
+        } catch (e: ScanFailure) {
+            throw ScanFailure(e.message.orEmpty() + "\n\n" + diagnose(apiKey))
+        }
         return parseSessions(text)
+    }
+
+    /** Short plain-language check of the network and the API key, shown under a failure. */
+    private suspend fun diagnose(apiKey: String): String = withContext(Dispatchers.IO) {
+        val systemDnsOk = try {
+            InetAddress.getByName(HOST)
+            true
+        } catch (e: Exception) {
+            false
+        }
+
+        var keyLine: String
+        var reachable = false
+        try {
+            val result = withTimeoutOrNull(20_000) { service.listModels(apiKey, 1) }
+            if (result == null) {
+                keyLine = "API key: could not be checked in time. The connection is very slow."
+            } else {
+                reachable = true
+                keyLine = "API key: working. Google accepted it."
+            }
+        } catch (e: HttpException) {
+            reachable = true
+            keyLine = when (e.code()) {
+                400, 401, 403 -> "API key: not working. Google rejected it. Create a new key in AI Studio and paste it in Settings."
+                429 -> "API key: working, but you have hit the free quota. Wait a minute or try tomorrow."
+                else -> "API key: Google answered with error ${e.code()}."
+            }
+        } catch (e: IOException) {
+            keyLine = "API key: could not be checked because the phone could not reach Google."
+        } catch (e: Exception) {
+            keyLine = "API key: could not be checked (${e.javaClass.simpleName})."
+        }
+
+        val networkLine = when {
+            systemDnsOk && reachable -> "Network: working. Google is reachable."
+            !systemDnsOk && reachable ->
+                "Network: your phone's DNS cannot find Google, so the app used a backup DNS. " +
+                    "Set Private DNS to Automatic in system settings and turn off any DNS filter or VPN."
+            !systemDnsOk ->
+                "Network: your phone cannot find Google's servers (DNS). Switch between Wi-Fi and mobile data, " +
+                    "set Private DNS to Automatic, and turn off any VPN or ad blocker."
+            else -> "Network: Google could not be reached. Check your connection and try again."
+        }
+        "Check result\n$networkLine\n$keyLine"
     }
 
     /**
@@ -368,6 +465,7 @@ class RoutineParserRepository(
     }
 
     private companion object {
+        const val HOST = "generativelanguage.googleapis.com"
         const val BASE_URL = "https://generativelanguage.googleapis.com/"
 
         /** Used only when the model lookup fails. */
