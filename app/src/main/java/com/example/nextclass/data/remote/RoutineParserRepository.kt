@@ -54,7 +54,8 @@ class RoutineParserRepository(
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(90, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
-            .callTimeout(100, TimeUnit.SECONDS)
+            .callTimeout(120, TimeUnit.SECONDS)
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .build()
         Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -210,7 +211,7 @@ class RoutineParserRepository(
                     if (e is java.io.InterruptedIOException) {
                         "Gemini took too long to answer. Try a smaller image or try again."
                     } else {
-                        "Network problem while contacting Gemini."
+                        "Network problem while contacting Gemini (${e.javaClass.simpleName}: ${e.message.orEmpty().take(110)})."
                     },
                 )
             } catch (e: SerializationException) {
@@ -374,9 +375,9 @@ class RoutineParserRepository(
         const val MAX_MODEL_ATTEMPTS = 4
 
         const val RENDER_DPI = 200f
-        const val MAX_EDGE_PX = 2600f
-        const val MAX_PDF_PAGES = 4
-        const val JPEG_QUALITY = 80
+        const val MAX_EDGE_PX = 1900f
+        const val MAX_PDF_PAGES = 3
+        const val JPEG_QUALITY = 72
         const val MAX_PAYLOAD_CHARS = 14_000_000
 
         const val SYSTEM_INSTRUCTION =
