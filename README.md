@@ -24,6 +24,10 @@ Built for a small private group of students. Each person brings their own free G
 - **API key guide.** A step-by-step card guide (Settings, or the notice on Home) covers getting a free Gemini key, privacy, and troubleshooting.
 - **Smooth motion.** Screens slide and fade, cards and lists ease in, day pills and buttons animate, and help cards expand smoothly.
 - **Share and backup.** Share your routine as a code message for friends, save a backup file, and restore from a backup or a pasted code.
+- **Attendance tracker.** Tap a class once it has started and mark it Present or Absent. The Attendance screen shows a percentage per course with a 75% line, tells you how many classes you can still miss or how many to attend in a row to recover, and lets you mark earlier classes from the last three weeks. Marks are included in backup files, not in share codes.
+- **Scan review flags.** After a scan, rows the AI may have misread (missing room, overlap, duplicate, odd time or length, odd course code) are marked with a vermilion dot and a reason. A "Needs check" filter shows only those rows.
+- **Update check.** Settings checks the latest GitHub release against the installed build and offers the APK download. A quiet check also runs at most once a day and shows a banner on Home. The build number is the CI run number.
+- **Battery help.** Settings and a dismissible Home notice ask Android to let NextClass run in the background, with extra tips for Xiaomi, Oppo, Vivo, Samsung and Huawei phones.
 - **One notification per day.** A single reminder for the first class of the day, with a configurable lead time (15, 30 or 45 minutes). No reminders for later classes.
 - **No background polling.** The widget refreshes through one exact alarm set for the next start or end time.
 - **Private by design.** The API key is stored with `EncryptedSharedPreferences` and never leaves the device except in requests to Google.
