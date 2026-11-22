@@ -91,7 +91,7 @@ fun NcCard(
     borderColor: androidx.compose.ui.graphics.Color = NcTheme.extras.hairline,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(20.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()

@@ -1,5 +1,6 @@
 package com.example.nextclass.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import com.example.nextclass.domain.model.AttendanceMark
 
@@ -9,6 +10,7 @@ data class AttendanceEntity(
     val date: String,
     val startTime: String,
     val status: String,
+    @ColumnInfo(defaultValue = "1") val semesterId: Long = 1,
 )
 
 fun AttendanceEntity.toDomain(): AttendanceMark =

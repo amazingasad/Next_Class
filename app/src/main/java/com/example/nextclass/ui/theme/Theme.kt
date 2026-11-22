@@ -3,12 +3,16 @@ package com.example.nextclass.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
+import android.os.Build
 import androidx.compose.ui.graphics.Color
 
 @Immutable
@@ -110,17 +114,35 @@ private val DarkScheme = darkColorScheme(
 @Composable
 fun NextClassTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val scheme = if (darkTheme) DarkScheme else LightScheme
-    val extras = NcExtras(
-        live = NcPalette.SignalVermilion,
-        liveText = if (darkTheme) NcPalette.VermilionTextDark else NcPalette.VermilionTextLight,
-        upcoming = if (darkTheme) NcPalette.SageDark else NcPalette.SageLight,
-        // 1dp hairline: outlineVariant at 35% alpha.
-        hairline = scheme.outlineVariant.copy(alpha = 0.35f),
-        muted = scheme.onSurfaceVariant,
-    )
+    val context = LocalContext.current
+    val useDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val scheme = when {
+        useDynamic && darkTheme -> dynamicDarkColorScheme(context)
+        useDynamic -> dynamicLightColorScheme(context)
+        darkTheme -> DarkScheme
+        else -> LightScheme
+    }
+    val extras = if (useDynamic) {
+        NcExtras(
+            live = scheme.primary,
+            liveText = scheme.primary,
+            upcoming = scheme.tertiary,
+            hairline = scheme.outlineVariant.copy(alpha = 0.6f),
+            muted = scheme.onSurfaceVariant,
+        )
+    } else {
+        NcExtras(
+            live = NcPalette.SignalVermilion,
+            liveText = if (darkTheme) NcPalette.VermilionTextDark else NcPalette.VermilionTextLight,
+            upcoming = if (darkTheme) NcPalette.SageDark else NcPalette.SageLight,
+            // 1dp hairline: outlineVariant at 35% alpha.
+            hairline = scheme.outlineVariant.copy(alpha = 0.35f),
+            muted = scheme.onSurfaceVariant,
+        )
+    }
     CompositionLocalProvider(LocalNcExtras provides extras) {
         MaterialTheme(
             colorScheme = scheme,

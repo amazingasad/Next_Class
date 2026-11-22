@@ -45,7 +45,7 @@ fun HeroNextClassCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, NcTheme.extras.hairline),
         tonalElevation = 0.dp,

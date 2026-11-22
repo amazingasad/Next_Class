@@ -17,6 +17,7 @@ import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.AttendanceMath
 import com.example.nextclass.domain.model.CourseAttendance
+import com.example.nextclass.domain.model.Semester
 import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.Course
@@ -70,6 +71,7 @@ data class SettingsUiState(
     val verify: VerifyState = VerifyState.Idle,
     val widgetTheme: Int = 0,
     val batteryNoticeHidden: Boolean = false,
+    val dynamicColor: Boolean = false,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -104,6 +106,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { rows -> rows.map { it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val semesters: StateFlow<List<Semester>> = dao.observeSemesters()
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val attendance: StateFlow<List<AttendanceMark>> = dao.observeAttendance()
         .map { rows -> rows.map { it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -130,6 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             remindersEnabled = preferences.firstClassReminderEnabled,
             widgetTheme = preferences.widgetTheme,
             batteryNoticeHidden = preferences.batteryNoticeHidden,
+            dynamicColor = preferences.dynamicColor,
         ),
     )
     val settings: StateFlow<SettingsUiState> = _settings.asStateFlow()
@@ -244,6 +251,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.getAttendance().filter { it.courseKey == courseKey }.forEach {
                 dao.deleteAttendance(it.courseKey, it.date, it.startTime)
+            }
+        }
+    }
+
+    // ---- Semesters ---------------------------------------------------------------------
+
+    fun addSemester(name: String) {
+        val clean = name.trim().ifEmpty { "New semester" }
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.createSemester(clean)
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    fun switchSemester(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.switchSemester(id)
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    fun renameSemester(id: Long, name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) { dao.renameSemester(id, clean) }
+    }
+
+    fun deleteSemester(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val removed = dao.removeSemester(id)
+            if (removed) {
+                WidgetUpdateHelper.refreshAll(getApplication())
+            } else {
+                _message.value = "You need at least one semester."
             }
         }
     }
@@ -380,6 +421,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferences.firstClassReminderEnabled = enabled
         _settings.update { it.copy(remindersEnabled = enabled) }
         refreshSchedule()
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        preferences.dynamicColor = enabled
+        _settings.update { it.copy(dynamicColor = enabled) }
+        viewModelScope.launch { WidgetUpdateHelper.updateWidgets(getApplication()) }
     }
 
     fun setWidgetTheme(mode: Int) {

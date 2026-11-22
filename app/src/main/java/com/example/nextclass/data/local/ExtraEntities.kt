@@ -1,5 +1,6 @@
 package com.example.nextclass.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.Course
@@ -24,6 +25,7 @@ data class CourseEntity(
     val codeKey: String,
     val code: String,
     val title: String,
+    @ColumnInfo(defaultValue = "1") val semesterId: Long = 1,
 )
 
 fun CourseEntity.toDomain(): Course = Course(code = code, title = title)

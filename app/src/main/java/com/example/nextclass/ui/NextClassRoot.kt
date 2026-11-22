@@ -10,6 +10,18 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.Modifier
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
@@ -30,6 +42,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.nextclass.data.remote.UpdateState
+import com.example.nextclass.ui.components.DockTab
+import com.example.nextclass.ui.components.NcDock
 import com.example.nextclass.ui.screens.ApiKeyGuideScreen
 import com.example.nextclass.ui.screens.AttendanceScreen
 import com.example.nextclass.ui.screens.CoursesScreen
@@ -62,6 +76,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val selectedDay by viewModel.selectedDay.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val importState by viewModel.importState.collectAsStateWithLifecycle()
+    val semesters by viewModel.semesters.collectAsStateWithLifecycle()
     val marks by viewModel.attendance.collectAsStateWithLifecycle()
     val attendanceSummary by viewModel.attendanceSummary.collectAsStateWithLifecycle()
     val updateState by viewModel.update.collectAsStateWithLifecycle()
@@ -156,9 +171,45 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
         screen = Screen.HOME
     }
 
+    val dockTab = when (screen) {
+        Screen.HOME -> DockTab.TODAY
+        Screen.WEEK -> DockTab.WEEK
+        Screen.ATTENDANCE -> DockTab.ATTENDANCE
+        Screen.SETTINGS -> DockTab.SETTINGS
+        else -> null
+    }
+    val selectTab: (DockTab) -> Unit = { tab ->
+        screen = when (tab) {
+            DockTab.TODAY -> Screen.HOME
+            DockTab.WEEK -> Screen.WEEK
+            DockTab.ATTENDANCE -> Screen.ATTENDANCE
+            DockTab.SETTINGS -> Screen.SETTINGS
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .weight(1f)
+            .then(if (dockTab != null) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier),
+    ) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
+            val topLevel = setOf(Screen.HOME, Screen.WEEK, Screen.ATTENDANCE, Screen.SETTINGS)
+            if (initialState in topLevel && targetState in topLevel) {
+                // Siblings in the dock: a short horizontal drift with a fade-through.
+                val order = listOf(Screen.HOME, Screen.WEEK, Screen.ATTENDANCE, Screen.SETTINGS)
+                val direction = if (order.indexOf(targetState) > order.indexOf(initialState)) 1 else -1
+                (
+                    slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> direction * w / 10 } +
+                        fadeIn(tween(240, delayMillis = 70)) +
+                        scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 0.97f)
+                    ) togetherWith (
+                    slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { w -> -direction * w / 10 } +
+                        fadeOut(tween(110))
+                    )
+            } else {
             val forward = targetState != Screen.HOME
             val enterOffset: (Int) -> Int = { width -> if (forward) width / 6 else -width / 8 }
             val exitOffset: (Int) -> Int = { width -> if (forward) -width / 8 else width / 6 }
@@ -169,6 +220,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 slideOutHorizontally(tween(300, easing = FastOutSlowInEasing), exitOffset) +
                     fadeOut(tween(200))
                 )
+            }
         },
         label = "screen",
     ) { target ->
@@ -182,10 +234,12 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 showNotificationNotice = permissionNeeded && !notificationsGranted,
                 onSelectDay = viewModel::selectDay,
                 onImport = { screen = Screen.IMPORT },
-                onSettings = { screen = Screen.SETTINGS },
                 onCourses = { screen = Screen.COURSES },
-                onWeek = { screen = Screen.WEEK },
-                onAttendance = { screen = Screen.ATTENDANCE },
+                semesters = semesters,
+                onSwitchSemester = viewModel::switchSemester,
+                onAddSemester = viewModel::addSemester,
+                onRenameSemester = viewModel::renameSemester,
+                onDeleteSemester = viewModel::deleteSemester,
                 hasApiKey = settings.hasKey,
                 onKeyGuide = openGuide,
                 onCancelledChange = viewModel::setCancelled,
@@ -232,6 +286,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 message = message,
                 onDismissMessage = viewModel::dismissMessage,
                 onWidgetTheme = viewModel::setWidgetTheme,
+                onDynamicColor = viewModel::setDynamicColor,
                 onShare = shareRoutine,
                 onExportBackup = { exportLauncher.launch("nextclass-backup.json") },
                 onRestoreBackup = { restoreLauncher.launch(arrayOf("*/*")) },
@@ -283,9 +338,24 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
             Screen.GUIDE -> ApiKeyGuideScreen(
                 hasKey = settings.hasKey,
+                verify = settings.verify,
+                onVerifyKey = viewModel::verifyAndSaveKey,
                 onBack = { screen = guideFrom },
-                onOpenSettings = { screen = Screen.SETTINGS },
+                onFinished = { screen = guideFrom },
             )
         }
+    }
+    }
+    AnimatedVisibility(
+        visible = dockTab != null,
+        enter = slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(240)),
+        exit = slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(160)),
+    ) {
+        NcDock(
+            selected = dockTab ?: DockTab.TODAY,
+            onSelect = selectTab,
+            modifier = Modifier.navigationBarsPadding(),
+        )
+    }
     }
 }

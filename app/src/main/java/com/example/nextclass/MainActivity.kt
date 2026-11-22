@@ -7,10 +7,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nextclass.ui.MainViewModel
 import com.example.nextclass.ui.NextClassRoot
 import com.example.nextclass.ui.theme.NextClassTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Fully transparent status and navigation bars, content draws edge to edge.
@@ -23,8 +28,9 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
         }
         setContent {
-            NextClassTheme {
-                NextClassRoot()
+            val settings by viewModel.settings.collectAsStateWithLifecycle()
+            NextClassTheme(dynamicColor = settings.dynamicColor) {
+                NextClassRoot(viewModel)
             }
         }
     }

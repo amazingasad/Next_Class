@@ -43,6 +43,7 @@ import com.example.nextclass.data.local.AppDatabase
 import com.example.nextclass.data.local.AppPreferences
 import com.example.nextclass.data.local.effectiveSessions
 import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.NextClassState
 import com.example.nextclass.domain.model.TimeFormat
 import com.example.nextclass.domain.model.focusSession
@@ -66,12 +67,25 @@ class NextClassWidget : GlanceAppWidget() {
         val nowMinutes: Int,
         val focusId: Long?,
         val themeMode: Int,
+        val dynamic: Boolean,
+        val marks: Map<Long, Boolean>,
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val sessions = AppDatabase.getInstance(context).routineDao().effectiveSessions()
-        val themeMode = AppPreferences(context).widgetTheme
+        val prefs = AppPreferences(context)
+        val themeMode = prefs.widgetTheme
+        val dynamic = prefs.dynamicColor
         val now = LocalDateTime.now()
+        val today = now.toLocalDate().toString()
+        val todaysMarks = AppDatabase.getInstance(context).routineDao().getAttendance().filter { it.date == today }
+        val marks = HashMap<Long, Boolean>()
+        sessions.forEach { s ->
+            val mark = todaysMarks.firstOrNull {
+                it.courseKey == CourseCodes.key(s.courseCode) && it.startTime == s.startTime
+            }
+            if (mark != null) marks[s.id] = mark.status == "P"
+        }
         val state = GetCurrentOrNextClassUseCase().invoke(sessions, now)
         val nowMinutes = now.hour * 60 + now.minute
 
@@ -83,6 +97,8 @@ class NextClassWidget : GlanceAppWidget() {
                 nowMinutes = nowMinutes,
                 focusId = state.focusSession?.id,
                 themeMode = themeMode,
+                dynamic = dynamic,
+                marks = marks,
             )
             is NextClassState.NextDayPreview -> Model(
                 state = state,
@@ -91,8 +107,10 @@ class NextClassWidget : GlanceAppWidget() {
                 nowMinutes = -1,
                 focusId = state.firstSession.id,
                 themeMode = themeMode,
+                dynamic = dynamic,
+                marks = emptyMap(),
             )
-            NextClassState.NoClasses -> Model(state, emptyList(), nowMinutes, null, themeMode)
+            NextClassState.NoClasses -> Model(state, emptyList(), nowMinutes, null, themeMode, dynamic, emptyMap())
         }
         provideContent { WidgetContent(model) }
     }
@@ -107,8 +125,11 @@ class NextClassWidget : GlanceAppWidget() {
     private fun WidgetContent(model: Model) {
         val wide = LocalSize.current.width >= WIDE_BREAKPOINT
         val live = model.state is NextClassState.Ongoing
-        val p = remember(model.themeMode) { WidgetPalette(model.themeMode) }
-        val openApp = actionStartActivity(Intent(LocalContext.current, MainActivity::class.java))
+        val widgetContext = LocalContext.current
+        val p = remember(model.themeMode, model.dynamic) {
+            WidgetPalette(model.themeMode, widgetContext, model.dynamic)
+        }
+        val openApp = actionStartActivity(Intent(widgetContext, MainActivity::class.java))
 
         // Outer box paints the 1dp hairline, inner box paints the surface.
         Box(
@@ -177,6 +198,7 @@ class NextClassWidget : GlanceAppWidget() {
                                     past = session.endMinutes <= model.nowMinutes,
                                     focus = session.id == model.focusId,
                                     ongoing = live && session.id == model.focusId,
+                                    status = model.marks[session.id],
                                     wide = wide,
                                     p = p,
                                 )
@@ -194,6 +216,7 @@ class NextClassWidget : GlanceAppWidget() {
         past: Boolean,
         focus: Boolean,
         ongoing: Boolean,
+        status: Boolean?,
         wide: Boolean,
         p: WidgetPalette,
     ) {
@@ -264,10 +287,18 @@ class NextClassWidget : GlanceAppWidget() {
                         )
                     }
                     Text(
-                        text = session.room.uppercase(),
+                        text = when (status) {
+                            true -> session.room.uppercase() + "  \u2022  PRESENT"
+                            false -> session.room.uppercase() + "  \u2022  ABSENT"
+                            null -> session.room.uppercase()
+                        },
                         maxLines = 1,
                         style = TextStyle(color = secondary, fontSize = 11.sp),
                     )
+                    if (ongoing) {
+                        Spacer(modifier = GlanceModifier.height(5.dp))
+                        AttendanceChips(sessionId = session.id, status = status, p = p)
+                    }
                 }
 
                 if (wide) {

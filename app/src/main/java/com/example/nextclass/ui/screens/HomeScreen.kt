@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarViewWeek
-import androidx.compose.material.icons.rounded.FactCheck
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.UploadFile
@@ -37,6 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
+import com.example.nextclass.domain.model.Semester
+import com.example.nextclass.ui.components.SemesterSheet
+import com.example.nextclass.ui.components.StatusDot
+import com.example.nextclass.ui.components.TimelineRail
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -69,6 +80,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val DATE_LABEL: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
+private val LONG_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ENGLISH)
 
 @Composable
 fun HomeScreen(
@@ -80,9 +92,12 @@ fun HomeScreen(
     showNotificationNotice: Boolean,
     onSelectDay: (Int) -> Unit,
     onImport: () -> Unit,
-    onSettings: () -> Unit,
     onCourses: () -> Unit,
-    onWeek: () -> Unit,
+    semesters: List<Semester>,
+    onSwitchSemester: (Long) -> Unit,
+    onAddSemester: (String) -> Unit,
+    onRenameSemester: (Long, String) -> Unit,
+    onDeleteSemester: (Long) -> Unit,
     hasApiKey: Boolean,
     onKeyGuide: () -> Unit,
     onCancelledChange: (ClassSession, LocalDate, Boolean) -> Unit,
@@ -93,7 +108,6 @@ fun HomeScreen(
     onRequestNotifications: () -> Unit,
     marks: List<AttendanceMark>,
     onMark: (ClassSession, LocalDate, Boolean?) -> Unit,
-    onAttendance: () -> Unit,
     update: UpdateState.Available?,
     onOpenUpdate: (String) -> Unit,
     onDismissUpdate: () -> Unit,
@@ -105,6 +119,7 @@ fun HomeScreen(
     var editing by remember { mutableStateOf<ClassSession?>(null) }
     var creating by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf<ClassSession?>(null) }
+    var showSemesters by remember { mutableStateOf(false) }
 
     val today = now.dayOfWeek.value
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -115,12 +130,11 @@ fun HomeScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         TopBar(
-            dateLabel = now.format(DATE_LABEL),
+            now = now,
+            semesterName = semesters.firstOrNull { it.active }?.name ?: "Semester 1",
+            onSemester = { showSemesters = true },
             onImport = onImport,
             onCourses = onCourses,
-            onWeek = onWeek,
-            onAttendance = onAttendance,
-            onSettings = onSettings,
         )
 
         if (sessions == null) return@Column
@@ -305,7 +319,6 @@ fun HomeScreen(
                                 },
                                 onClick = { acting = entry.session },
                             )
-                            Hairline(Modifier.padding(horizontal = 20.dp))
                         }
 
                         is DayEntry.Gap -> Column(Modifier.animateItem()) { GapRow(entry.minutes) }
@@ -338,6 +351,17 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showSemesters) {
+        SemesterSheet(
+            semesters = semesters,
+            onSwitch = onSwitchSemester,
+            onAdd = onAddSemester,
+            onRename = onRenameSemester,
+            onDelete = onDeleteSemester,
+            onDismiss = { showSemesters = false },
+        )
     }
 
     editing?.let { target ->
@@ -480,90 +504,91 @@ private fun GapRow(minutes: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 100.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+            .height(IntrinsicSize.Min)
+            .padding(start = 20.dp, end = 20.dp),
     ) {
-        MicroLabel(text = "${TimeFormat.duration(minutes)} free")
+        Spacer(Modifier.width(72.dp))
+        TimelineRail(showNode = false)
+        Box(Modifier.padding(start = 8.dp, top = 10.dp, bottom = 10.dp)) {
+            MicroLabel(text = "${TimeFormat.duration(minutes)} free")
+        }
     }
 }
 
 @Composable
 private fun TopBar(
-    dateLabel: String,
+    now: LocalDateTime,
+    semesterName: String,
+    onSemester: () -> Unit,
     onImport: () -> Unit,
     onCourses: () -> Unit,
-    onWeek: () -> Unit,
-    onAttendance: () -> Unit,
-    onSettings: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    Row(
+    val chipShape = RoundedCornerShape(20.dp)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            MicroLabel(dateLabel)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.app_name),
-                style = NcText.Headline,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        IconButton(onClick = onWeek) {
-            Icon(
-                imageVector = Icons.Rounded.CalendarViewWeek,
-                contentDescription = stringResource(R.string.cd_week),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        IconButton(onClick = onAttendance) {
-            Icon(
-                imageVector = Icons.Rounded.FactCheck,
-                contentDescription = stringResource(R.string.cd_attendance),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = stringResource(R.string.cd_more),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                containerColor = MaterialTheme.colorScheme.surface,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .clip(chipShape)
+                    .border(1.dp, NcTheme.extras.hairline, chipShape)
+                    .clickable(onClick = onSemester)
+                    .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                DropdownMenuItem(
-                    text = { Text("Import routine", style = NcText.Body) },
-                    leadingIcon = { Icon(Icons.Rounded.UploadFile, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onImport()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Courses", style = NcText.Body) },
-                    leadingIcon = { Icon(Icons.Rounded.Book, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onCourses()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Settings", style = NcText.Body) },
-                    leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
-                    onClick = {
-                        menuOpen = false
-                        onSettings()
-                    },
+                StatusDot(NcTheme.extras.live)
+                Spacer(Modifier.width(8.dp))
+                MicroLabel(text = semesterName, color = MaterialTheme.colorScheme.onSurface)
+                Icon(
+                    imageVector = Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = NcTheme.extras.muted,
+                    modifier = Modifier.size(18.dp),
                 )
             }
+            Spacer(Modifier.weight(1f))
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(R.string.cd_more),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Import routine", style = NcText.Body) },
+                        leadingIcon = { Icon(Icons.Rounded.UploadFile, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onImport()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Courses", style = NcText.Body) },
+                        leadingIcon = { Icon(Icons.Rounded.Book, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onCourses()
+                        },
+                    )
+                }
+            }
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = DayNames.full(now.dayOfWeek.value),
+            style = NcText.Display.copy(fontSize = 52.sp, lineHeight = 54.sp, letterSpacing = (-1.5).sp),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        MicroLabel(text = now.format(LONG_DATE))
     }
 }

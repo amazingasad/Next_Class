@@ -1,5 +1,6 @@
 package com.example.nextclass.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.nextclass.domain.model.ClassSession
@@ -14,8 +15,8 @@ data class ClassSessionEntity(
     val room: String,
     val startTime: String,
     val endTime: String,
-    val type: String
-
+    val type: String,
+    @ColumnInfo(defaultValue = "1") val semesterId: Long = 1,
 )
 
 fun ClassSessionEntity.toDomain(): ClassSession = ClassSession(

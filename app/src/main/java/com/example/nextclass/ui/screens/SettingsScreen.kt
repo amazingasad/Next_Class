@@ -71,6 +71,7 @@ fun SettingsScreen(
     message: String?,
     onDismissMessage: () -> Unit,
     onWidgetTheme: (Int) -> Unit,
+    onDynamicColor: (Boolean) -> Unit,
     onShare: () -> Unit,
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -244,6 +245,42 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
+            // ---- Appearance ----
+            MicroLabel("Appearance")
+            val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                SelectPill(
+                    label = "NextClass",
+                    selected = !state.dynamicColor || !dynamicSupported,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onDynamicColor(false)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                SelectPill(
+                    label = "Material You",
+                    selected = state.dynamicColor && dynamicSupported,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (dynamicSupported) onDynamicColor(true)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                text = if (dynamicSupported) {
+                    "NextClass keeps the warm off-white, obsidian and vermilion look. Material You takes its colors from your wallpaper, in the app and on both widgets."
+                } else {
+                    "Material You needs Android 12 or newer."
+                },
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
 
             Spacer(Modifier.height(4.dp))
             Hairline()

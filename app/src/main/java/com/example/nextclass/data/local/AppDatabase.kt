@@ -13,8 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ClassOverrideEntity::class,
         CourseEntity::class,
         AttendanceEntity::class,
+        SemesterEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,6 +47,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `semesters` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `active` INTEGER NOT NULL)",
+                )
+                db.execSQL("INSERT INTO `semesters` (`id`, `name`, `active`) VALUES (1, 'Semester 1', 1)")
+                db.execSQL("ALTER TABLE `class_sessions` ADD COLUMN `semesterId` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `courses` ADD COLUMN `semesterId` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `attendance` ADD COLUMN `semesterId` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        private val FIRST_SEMESTER = object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                db.execSQL("INSERT INTO `semesters` (`id`, `name`, `active`) VALUES (1, 'Semester 1', 1)")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -55,7 +75,8 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nextclass.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addCallback(FIRST_SEMESTER).build().also { instance = it }
             }
     }
 }
