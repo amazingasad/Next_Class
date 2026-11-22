@@ -4,6 +4,20 @@ A precision class-routine app for Android. Import your university timetable as a
 
 Built for a small private group of students. Each person brings their own free Gemini API key. There is no backend server.
 
+## Preview
+
+These are design previews of the main screens, drawn to match the app's layout and palette. Replace them with real device screenshots in `docs/images` when you have them.
+
+<p align="center">
+  <img src="docs/images/home.png" width="230" alt="Home with timeline rail and dock" />
+  <img src="docs/images/attendance.png" width="230" alt="Attendance tracker" />
+  <img src="docs/images/api-key-wizard.png" width="230" alt="API key step cards" />
+</p>
+<p align="center">
+  <img src="docs/images/widget.png" width="230" alt="Widget with attendance buttons" />
+  <img src="docs/images/semesters.png" width="230" alt="Semester switcher" />
+</p>
+
 ## Features
 
 - **Routine import.** Pick a PDF or image (JPG/PNG) of your timetable. PDFs are rendered page by page at high resolution with `PdfRenderer`. An optional section or group filter (for example `Section A, Group A1`) isolates your classes from multi-section timetables.
@@ -28,6 +42,11 @@ Built for a small private group of students. Each person brings their own free G
 - **Scan review flags.** After a scan, rows the AI may have misread (missing room, overlap, duplicate, odd time or length, odd course code) are marked with a vermilion dot and a reason. A "Needs check" filter shows only those rows.
 - **Update check.** Settings checks the latest GitHub release against the installed build and offers the APK download. A quiet check also runs at most once a day and shows a banner on Home. The build number is the CI run number.
 - **Battery help.** Settings and a dismissible Home notice ask Android to let NextClass run in the background, with extra tips for Xiaomi, Oppo, Vivo, Samsung and Huawei phones.
+- **Multiple semesters.** Tap the semester chip on Home to add, switch, rename or delete semesters. Each one has its own classes, courses and attendance, and only the active one drives the widgets and the reminder. Existing data moves into "Semester 1". Backups and share codes cover the active semester.
+- **Widget attendance buttons.** The ongoing class in both widgets has Present and Absent buttons. Tap the chosen one again to clear it.
+- **Material You.** Settings, Appearance: keep the NextClass look or take colors from your wallpaper (Android 12+), in the app and on the widgets.
+- **New navigation and look.** A floating dock for Today, Week, Attendance and Settings; a timeline rail with a pulsing live node; a large day header; softer corners.
+- **Key setup cards.** The API key guide is a deck of step cards with Next and Back, an Open AI Studio button, and paste-and-verify on the last card.
 - **One notification per day.** A single reminder for the first class of the day, with a configurable lead time (15, 30 or 45 minutes). No reminders for later classes.
 - **No background polling.** The widget refreshes through one exact alarm set for the next start or end time.
 - **Private by design.** The API key is stored with `EncryptedSharedPreferences` and never leaves the device except in requests to Google.
