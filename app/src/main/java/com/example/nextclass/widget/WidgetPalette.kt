@@ -6,6 +6,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.glance.color.ColorProvider
+import androidx.glance.unit.ColorProvider as ProviderType
 
 /**
  * Widget colors. [mode] 0 follows the system, 1 is always light, 2 is always dark.
@@ -13,7 +14,7 @@ import androidx.glance.color.ColorProvider
  */
 internal class WidgetPalette(private val mode: Int, context: Context? = null, dynamic: Boolean = false) {
 
-    private fun pick(day: Color, night: Color) = when (mode) {
+    private fun pick(day: Color, night: Color): ProviderType = when (mode) {
         1 -> ColorProvider(day = day, night = day)
         2 -> ColorProvider(day = night, night = night)
         else -> ColorProvider(day = day, night = night)
@@ -23,7 +24,7 @@ internal class WidgetPalette(private val mode: Int, context: Context? = null, dy
     private val light = if (useDynamic) dynamicLightColorScheme(context!!) else null
     private val dark = if (useDynamic) dynamicDarkColorScheme(context!!) else null
 
-    private fun pick(day: Color, night: Color, dayDynamic: (androidx.compose.material3.ColorScheme) -> Color, nightDynamic: (androidx.compose.material3.ColorScheme) -> Color): ColorProvider {
+    private fun pick(day: Color, night: Color, dayDynamic: (androidx.compose.material3.ColorScheme) -> Color, nightDynamic: (androidx.compose.material3.ColorScheme) -> Color): ProviderType {
         val l = light
         val d = dark
         return if (l != null && d != null) pick(dayDynamic(l), nightDynamic(d)) else pick(day, night)
