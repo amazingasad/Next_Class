@@ -12,6 +12,11 @@ import com.example.nextclass.data.local.RoutineBundle
 import com.example.nextclass.data.local.toDomain
 import com.example.nextclass.data.local.toEntity
 import com.example.nextclass.data.remote.RoutineParserRepository
+import com.example.nextclass.data.remote.UpdateChecker
+import com.example.nextclass.data.remote.UpdateState
+import com.example.nextclass.domain.model.AttendanceMark
+import com.example.nextclass.domain.model.AttendanceMath
+import com.example.nextclass.domain.model.CourseAttendance
 import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.Course
@@ -64,6 +69,7 @@ data class SettingsUiState(
     val remindersEnabled: Boolean = true,
     val verify: VerifyState = VerifyState.Idle,
     val widgetTheme: Int = 0,
+    val batteryNoticeHidden: Boolean = false,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -73,6 +79,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = AppPreferences(application)
     private val repository = RoutineParserRepository(application, keyManager)
     private val resolver = GetCurrentOrNextClassUseCase()
+    private val updateChecker = UpdateChecker(application)
 
     /** Null until the first database read finishes. */
     val sessions: StateFlow<List<ClassSession>?> = dao.observeAll()
@@ -97,6 +104,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { rows -> rows.map { it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val attendance: StateFlow<List<AttendanceMark>> = dao.observeAttendance()
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val attendanceSummary: StateFlow<List<CourseAttendance>> =
+        combine(sessions, courses, attendance) { list, courseList, marks ->
+            AttendanceMath.summarize(list.orEmpty(), courseList, marks)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val hero: StateFlow<NextClassState> = combine(sessions, overrides, now) { list, changes, time ->
         if (list == null) {
             NextClassState.NoClasses
@@ -113,9 +129,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             leadMinutes = preferences.leadMinutes,
             remindersEnabled = preferences.firstClassReminderEnabled,
             widgetTheme = preferences.widgetTheme,
+            batteryNoticeHidden = preferences.batteryNoticeHidden,
         ),
     )
     val settings: StateFlow<SettingsUiState> = _settings.asStateFlow()
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+
+    private val _updateDismissed = MutableStateFlow(false)
+    val updateDismissed: StateFlow<Boolean> = _updateDismissed.asStateFlow()
+
+    val currentBuild: Int get() = updateChecker.currentBuild()
 
     private val _import = MutableStateFlow<ImportUiState>(ImportUiState.Idle)
     val importState: StateFlow<ImportUiState> = _import.asStateFlow()
@@ -135,6 +160,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val hasKey = keyManager.hasKey()
             _settings.update { it.copy(hasKey = hasKey) }
         }
+        autoCheckForUpdate()
     }
 
     // ---- Home --------------------------------------------------------------------------
@@ -196,6 +222,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.Default) {
             WidgetUpdateHelper.refreshAll(getApplication())
         }
+    }
+
+    // ---- Attendance --------------------------------------------------------------------
+
+    /** Marks a class present or absent. Passing null clears the mark. */
+    fun markAttendance(session: ClassSession, date: LocalDate, present: Boolean?) {
+        val key = CourseCodes.key(session.courseCode)
+        viewModelScope.launch(Dispatchers.IO) {
+            if (present == null) {
+                dao.deleteAttendance(key, date.toString(), session.startTime)
+            } else {
+                dao.upsertAttendance(
+                    AttendanceMark(key, date.toString(), session.startTime, present).toEntity(),
+                )
+            }
+        }
+    }
+
+    fun clearAttendanceFor(courseKey: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.getAttendance().filter { it.courseKey == courseKey }.forEach {
+                dao.deleteAttendance(it.courseKey, it.date, it.startTime)
+            }
+        }
+    }
+
+    // ---- Updates and battery -----------------------------------------------------------
+
+    fun checkForUpdate() {
+        if (_update.value is UpdateState.Checking) return
+        _update.value = UpdateState.Checking
+        viewModelScope.launch {
+            val result = updateChecker.check()
+            if (result !is UpdateState.Failed) preferences.lastUpdateCheck = System.currentTimeMillis()
+            _updateDismissed.value = false
+            _update.value = result
+        }
+    }
+
+    /** At most one quiet check a day, so the Home banner appears without the user asking. */
+    private fun autoCheckForUpdate() {
+        val dayMillis = 24L * 60L * 60L * 1000L
+        if (System.currentTimeMillis() - preferences.lastUpdateCheck < dayMillis) return
+        viewModelScope.launch {
+            val result = updateChecker.check()
+            if (result is UpdateState.Available) {
+                _update.value = result
+            }
+            if (result !is UpdateState.Failed) preferences.lastUpdateCheck = System.currentTimeMillis()
+        }
+    }
+
+    fun dismissUpdateBanner() {
+        _updateDismissed.value = true
+    }
+
+    fun hideBatteryNotice() {
+        preferences.batteryNoticeHidden = true
+        _settings.update { it.copy(batteryNoticeHidden = true) }
     }
 
     // ---- Import ------------------------------------------------------------------------
@@ -367,6 +452,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         RoutineCodec.bundleOf(
             dao.getAll().map { it.toDomain() },
             dao.getCourses().map { it.toDomain() },
+            dao.getAttendance().map { it.toDomain() },
         )
     }
 
@@ -376,7 +462,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (bundle.sessions.isEmpty()) {
                 _message.value = "Nothing to share yet. Import a routine first."
             } else {
-                onReady(RoutineCodec.shareMessage(bundle))
+                onReady(RoutineCodec.shareMessage(bundle.copy(attendance = emptyList())))
             }
         }
     }
@@ -429,6 +515,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (courseList.isNotEmpty()) {
                 dao.clearCourses()
                 dao.upsertCourses(courseList.map { it.toEntity() })
+            }
+            val marks = RoutineCodec.toAttendance(bundle)
+            if (marks.isNotEmpty()) {
+                dao.replaceAttendance(marks.map { it.toEntity() })
             }
             applyCourseTitles()
         }

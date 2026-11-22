@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -48,6 +49,9 @@ fun ClassActionSheet(
     onCancelledChange: (Boolean) -> Unit,
     onRoomForDate: (String) -> Unit,
     onReset: () -> Unit,
+    canMark: Boolean,
+    attendance: Boolean?,
+    onMark: (Boolean?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -98,6 +102,31 @@ fun ClassActionSheet(
                 onClick = onEdit,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            if (canMark) {
+                Hairline()
+                MicroLabel("Attendance today")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                    SelectPill(
+                        label = "Present",
+                        selected = attendance == true,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onMark(if (attendance == true) null else true)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    SelectPill(
+                        label = "Absent",
+                        selected = attendance == false,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onMark(if (attendance == false) null else false)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
 
             Hairline()
             MicroLabel("Only on this date")

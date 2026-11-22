@@ -3,6 +3,7 @@ package com.example.nextclass.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,8 +20,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarViewWeek
+import androidx.compose.material.icons.rounded.FactCheck
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,7 +42,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.nextclass.R
+import com.example.nextclass.data.remote.UpdateState
+import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.ClassOverride
+import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.DayNames
 import com.example.nextclass.domain.model.NextClassState
@@ -83,6 +91,15 @@ fun HomeScreen(
     onSaveSession: (ClassSession) -> Unit,
     onDeleteSession: (Long) -> Unit,
     onRequestNotifications: () -> Unit,
+    marks: List<AttendanceMark>,
+    onMark: (ClassSession, LocalDate, Boolean?) -> Unit,
+    onAttendance: () -> Unit,
+    update: UpdateState.Available?,
+    onOpenUpdate: (String) -> Unit,
+    onDismissUpdate: () -> Unit,
+    showBatteryNotice: Boolean,
+    onRequestBattery: () -> Unit,
+    onHideBatteryNotice: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var editing by remember { mutableStateOf<ClassSession?>(null) }
@@ -102,6 +119,7 @@ fun HomeScreen(
             onImport = onImport,
             onCourses = onCourses,
             onWeek = onWeek,
+            onAttendance = onAttendance,
             onSettings = onSettings,
         )
 
@@ -122,6 +140,32 @@ fun HomeScreen(
                     state = hero,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
+            }
+
+            if (update != null) {
+                item(key = "update-notice") {
+                    NoticeRow(
+                        text = "A newer version of NextClass is ready.",
+                        action = "Download",
+                        secondary = "Later",
+                        onAction = { onOpenUpdate(update.url) },
+                        onSecondary = onDismissUpdate,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+            }
+
+            if (showBatteryNotice && sessions.isNotEmpty()) {
+                item(key = "battery-notice") {
+                    NoticeRow(
+                        text = "Let NextClass run in the background so the widget and reminder stay on time.",
+                        action = "Allow",
+                        secondary = "Hide",
+                        onAction = onRequestBattery,
+                        onSecondary = onHideBatteryNotice,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
 
             if (!hasApiKey) {
@@ -254,6 +298,11 @@ fun HomeScreen(
                                 isLive = entry.session.id == liveId,
                                 cancelled = cancelled,
                                 roomOverride = if (cancelled) null else entry.override?.room,
+                                attendance = if (selectedDate == now.toLocalDate()) {
+                                    markFor(marks, entry.session, selectedDate)
+                                } else {
+                                    null
+                                },
                                 onClick = { acting = entry.session },
                             )
                             Hairline(Modifier.padding(horizontal = 20.dp))
@@ -330,6 +379,11 @@ fun HomeScreen(
                 onResetOverride(target, actDate)
                 acting = null
             },
+            canMark = actDate == now.toLocalDate() &&
+                target.startMinutes <= now.hour * 60 + now.minute &&
+                current?.cancelled != true,
+            attendance = markFor(marks, target, actDate),
+            onMark = { onMark(target, actDate, it) },
             onDismiss = { acting = null },
         )
     }
@@ -346,6 +400,49 @@ fun HomeScreen(
             onDismiss = { creating = false },
         )
     }
+}
+
+private fun markFor(marks: List<AttendanceMark>, session: ClassSession, date: LocalDate): Boolean? {
+    val key = CourseCodes.key(session.courseCode)
+    val dateText = date.toString()
+    return marks.firstOrNull {
+        it.courseKey == key && it.date == dateText && it.startTime == session.startTime
+    }?.present
+}
+
+@Composable
+private fun NoticeRow(
+    text: String,
+    action: String,
+    secondary: String,
+    onAction: () -> Unit,
+    onSecondary: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = text,
+            style = NcText.Body,
+            color = NcTheme.extras.muted,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            MicroLabel(
+                text = action,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.clickable(onClick = onAction),
+            )
+            MicroLabel(
+                text = secondary,
+                modifier = Modifier.clickable(onClick = onSecondary),
+            )
+        }
+    }
+    Hairline(Modifier.padding(horizontal = 20.dp))
 }
 
 private sealed interface DayEntry {
@@ -395,8 +492,10 @@ private fun TopBar(
     onImport: () -> Unit,
     onCourses: () -> Unit,
     onWeek: () -> Unit,
+    onAttendance: () -> Unit,
     onSettings: () -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -413,13 +512,6 @@ private fun TopBar(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
-        IconButton(onClick = onImport) {
-            Icon(
-                imageVector = Icons.Rounded.UploadFile,
-                contentDescription = stringResource(R.string.cd_import_routine),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
         IconButton(onClick = onWeek) {
             Icon(
                 imageVector = Icons.Rounded.CalendarViewWeek,
@@ -427,19 +519,51 @@ private fun TopBar(
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
-        IconButton(onClick = onCourses) {
+        IconButton(onClick = onAttendance) {
             Icon(
-                imageVector = Icons.Rounded.Book,
-                contentDescription = stringResource(R.string.cd_courses),
+                imageVector = Icons.Rounded.FactCheck,
+                contentDescription = stringResource(R.string.cd_attendance),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
-        IconButton(onClick = onSettings) {
-            Icon(
-                imageVector = Icons.Rounded.Settings,
-                contentDescription = stringResource(R.string.cd_settings),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = stringResource(R.string.cd_more),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Import routine", style = NcText.Body) },
+                    leadingIcon = { Icon(Icons.Rounded.UploadFile, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onImport()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Courses", style = NcText.Body) },
+                    leadingIcon = { Icon(Icons.Rounded.Book, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onCourses()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Settings", style = NcText.Body) },
+                    leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onSettings()
+                    },
+                )
+            }
         }
     }
 }

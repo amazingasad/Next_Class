@@ -1,5 +1,16 @@
 package com.example.nextclass.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.width
+import com.example.nextclass.domain.model.ScanReview
+import com.example.nextclass.ui.components.StatusDot
+import com.example.nextclass.ui.components.PillSpacing
+import com.example.nextclass.ui.components.SelectPill
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -259,7 +270,13 @@ private fun ReviewStep(
     val haptic = LocalHapticFeedback.current
     var editing by remember { mutableStateOf<ClassSession?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var onlyFlagged by rememberSaveable { mutableStateOf(false) }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    val issues = remember(sessions) { ScanReview.issues(sessions) }
+    // Leaves the filter when the last flagged row has been fixed, so the list never looks empty.
+    val filtering = onlyFlagged && issues.isNotEmpty()
+    val visible = if (filtering) sessions.filter { it.id in issues } else sessions
 
     Column(Modifier.fillMaxSize()) {
         Text(
@@ -272,13 +289,51 @@ private fun ReviewStep(
             color = NcTheme.extras.muted,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
         )
+        AnimatedVisibility(
+            visible = issues.isNotEmpty(),
+            enter = expandVertically(tween(260)) + fadeIn(tween(220)),
+            exit = shrinkVertically(tween(220)) + fadeOut(tween(160)),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(NcTheme.extras.live)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (issues.size == 1) {
+                            "1 row needs a check. The AI was unsure about it."
+                        } else {
+                            "${issues.size} rows need a check. The AI was unsure about them."
+                        },
+                        style = NcText.Body,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                    SelectPill(
+                        label = "All rows",
+                        selected = !filtering,
+                        onClick = { onlyFlagged = false },
+                        modifier = Modifier.weight(1f),
+                    )
+                    SelectPill(
+                        label = "Needs check",
+                        selected = filtering,
+                        onClick = { onlyFlagged = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
-            val byDay = sessions.groupBy { it.dayOfWeek }.toSortedMap()
+            val byDay = visible.groupBy { it.dayOfWeek }.toSortedMap()
             byDay.forEach { (day, daySessions) ->
                 item(key = "day-$day") {
                     MicroLabel(
@@ -321,6 +376,7 @@ private fun ReviewStep(
                             TimelineSessionRow(
                                 session = session,
                                 isLive = false,
+                                flag = issues[session.id],
                                 onClick = { editing = session },
                             )
                         }

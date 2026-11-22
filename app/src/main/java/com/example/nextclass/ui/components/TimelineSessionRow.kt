@@ -35,6 +35,8 @@ fun TimelineSessionRow(
     modifier: Modifier = Modifier,
     cancelled: Boolean = false,
     roomOverride: String? = null,
+    attendance: Boolean? = null,
+    flag: String? = null,
 ) {
     val extras = NcTheme.extras
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -93,10 +95,24 @@ fun TimelineSessionRow(
                 text = when {
                     cancelled -> "Cancelled"
                     !roomOverride.isNullOrBlank() -> "Room changed \u2022 ${session.type.name}"
+                    attendance == true -> "${session.type.name} \u2022 Present"
+                    attendance == false -> "${session.type.name} \u2022 Absent"
                     else -> session.type.name
                 },
                 color = if (cancelled) extras.live else extras.muted,
             )
+            if (flag != null) {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(extras.live)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = flag,
+                        style = NcText.Time,
+                        color = extras.live,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.width(12.dp))

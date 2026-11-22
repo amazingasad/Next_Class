@@ -40,7 +40,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nextclass.R
+import android.os.Build
 import com.example.nextclass.data.local.AppPreferences
+import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.ui.SettingsUiState
 import com.example.nextclass.ui.VerifyState
 import com.example.nextclass.ui.components.Hairline
@@ -74,6 +76,12 @@ fun SettingsScreen(
     onRestoreBackup: () -> Unit,
     onImportShared: (String) -> Unit,
     onOpenGuide: () -> Unit,
+    batteryUnrestricted: Boolean,
+    onRequestBattery: () -> Unit,
+    updateState: UpdateState,
+    currentBuild: Int,
+    onCheckUpdate: () -> Unit,
+    onOpenUpdate: (String) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var keyText by rememberSaveable { mutableStateOf("") }
@@ -339,8 +347,88 @@ fun SettingsScreen(
                 style = NcText.Body,
                 color = NcTheme.extras.muted,
             )
+            PermissionRow(
+                title = "Run in background",
+                granted = batteryUnrestricted,
+                onRequest = onRequestBattery,
+            )
+            Text(
+                text = batteryAdvice(),
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
+            // ---- Updates ----
+            MicroLabel("App updates")
+            Text(
+                text = "Installed build $currentBuild",
+                style = NcText.Title,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            when (updateState) {
+                UpdateState.Checking -> Text(
+                    text = "Checking for a newer version.",
+                    style = NcText.Body,
+                    color = NcTheme.extras.muted,
+                )
+                is UpdateState.UpToDate -> Text(
+                    text = "You have the latest version.",
+                    style = NcText.Body,
+                    color = NcTheme.extras.muted,
+                )
+                is UpdateState.Available -> Text(
+                    text = "Build ${updateState.build} is available.",
+                    style = NcText.Body,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                is UpdateState.Failed -> Text(
+                    text = updateState.message,
+                    style = NcText.Body,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                UpdateState.Idle -> Text(
+                    text = "New versions are published on GitHub. Check to see if you are behind.",
+                    style = NcText.Body,
+                    color = NcTheme.extras.muted,
+                )
+            }
+            if (updateState is UpdateState.Available) {
+                PrimaryButton(
+                    text = "Download update",
+                    onClick = { onOpenUpdate(updateState.url) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            SecondaryButton(
+                text = if (updateState is UpdateState.Checking) "Checking" else "Check for updates",
+                onClick = onCheckUpdate,
+                enabled = updateState !is UpdateState.Checking,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
+}
+
+/** Short, phone-brand specific advice on top of the standard battery exemption. */
+private fun batteryAdvice(): String {
+    val base = "Phones stop apps they think are idle, which can freeze the widget and skip the reminder. Allow this and NextClass stays on time."
+    val extra = when (Build.MANUFACTURER.lowercase()) {
+        "xiaomi", "redmi", "poco" ->
+            " On Xiaomi, also open Security, then Permissions, then Autostart, and turn NextClass on."
+        "oppo", "realme", "oneplus" ->
+            " On this phone, also allow Auto-launch and Background activity for NextClass in the app's battery settings."
+        "vivo", "iqoo" ->
+            " On Vivo, also allow High background power consumption for NextClass in Battery settings."
+        "samsung" ->
+            " On Samsung, also set NextClass to Unrestricted under Battery, and remove it from Sleeping apps."
+        "huawei", "honor" ->
+            " On this phone, also set NextClass to Manage manually in App launch and turn on all three switches."
+        else -> ""
+    }
+    return base + extra
 }
 
 @Composable

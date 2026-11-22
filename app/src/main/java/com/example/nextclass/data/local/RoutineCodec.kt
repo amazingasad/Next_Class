@@ -1,6 +1,7 @@
 package com.example.nextclass.data.local
 
 import android.util.Base64
+import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.model.CourseCodes
@@ -31,11 +32,20 @@ data class BundleCourse(
 )
 
 @Serializable
+data class BundleAttendance(
+    val course: String,
+    val date: String,
+    val start: String,
+    val present: Boolean,
+)
+
+@Serializable
 data class RoutineBundle(
     val app: String = "nextclass",
     val version: Int = 1,
     val sessions: List<BundleSession> = emptyList(),
     val courses: List<BundleCourse> = emptyList(),
+    val attendance: List<BundleAttendance> = emptyList(),
 )
 
 /** Turns the routine into a backup file or a short share code, and back. */
@@ -47,7 +57,11 @@ object RoutineCodec {
     private val compact = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val pretty = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
 
-    fun bundleOf(sessions: List<ClassSession>, courses: List<Course>): RoutineBundle = RoutineBundle(
+    fun bundleOf(
+        sessions: List<ClassSession>,
+        courses: List<Course>,
+        attendance: List<AttendanceMark> = emptyList(),
+    ): RoutineBundle = RoutineBundle(
         sessions = sessions.map {
             BundleSession(
                 dayOfWeek = it.dayOfWeek,
@@ -60,6 +74,9 @@ object RoutineCodec {
             )
         },
         courses = courses.map { BundleCourse(code = it.code, title = it.title) },
+        attendance = attendance.map {
+            BundleAttendance(course = it.courseKey, date = it.date, start = it.startTime, present = it.present)
+        },
     )
 
     fun toBackupJson(bundle: RoutineBundle): String = pretty.encodeToString(RoutineBundle.serializer(), bundle)
@@ -113,7 +130,17 @@ object RoutineCodec {
         val courses = bundle.courses
             .filter { it.code.isNotBlank() && CourseCodes.key(it.code).isNotEmpty() }
             .map { it.copy(code = CourseCodes.pretty(it.code), title = it.title.trim()) }
-        return bundle.copy(sessions = sessions, courses = courses)
+        val attendance = bundle.attendance.mapNotNull { row ->
+            val key = CourseCodes.key(row.course)
+            val date = try {
+                java.time.LocalDate.parse(row.date).toString()
+            } catch (e: Exception) {
+                return@mapNotNull null
+            }
+            val start = TimeFormat.normalize(row.start) ?: return@mapNotNull null
+            if (key.isEmpty()) null else BundleAttendance(key, date, start, row.present)
+        }
+        return bundle.copy(sessions = sessions, courses = courses, attendance = attendance)
     }
 
     fun toSessions(bundle: RoutineBundle): List<ClassSession> = bundle.sessions.map {
@@ -130,4 +157,8 @@ object RoutineCodec {
 
     fun toCourses(bundle: RoutineBundle): List<Course> =
         bundle.courses.map { Course(code = it.code, title = it.title) }
+
+    fun toAttendance(bundle: RoutineBundle): List<AttendanceMark> = bundle.attendance.map {
+        AttendanceMark(courseKey = it.course, date = it.date, startTime = it.start, present = it.present)
+    }
 }

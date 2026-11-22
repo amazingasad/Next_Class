@@ -8,8 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ClassSessionEntity::class, ClassOverrideEntity::class, CourseEntity::class],
-    version = 2,
+    entities = [
+        ClassSessionEntity::class,
+        ClassOverrideEntity::class,
+        CourseEntity::class,
+        AttendanceEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -31,6 +36,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `attendance` (`courseKey` TEXT NOT NULL, `date` TEXT NOT NULL, " +
+                        "`startTime` TEXT NOT NULL, `status` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`courseKey`, `date`, `startTime`))",
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -40,7 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nextclass.db"
-                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
             }
     }
 }

@@ -57,47 +57,7 @@ class RoutineParserRepository(
         isLenient = true
     }
 
-    /**
-     * Uses the phone's DNS first. If that cannot find Google (Private DNS, ad blockers, a flaky
-     * ISP resolver), it asks Google and Cloudflare over HTTPS instead.
-     */
-    private val resilientDns: Dns by lazy {
-        val bootstrap = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()
-        val backups = listOf(
-            DnsOverHttps.Builder()
-                .client(bootstrap)
-                .url("https://dns.google/dns-query".toHttpUrl())
-                .bootstrapDnsHosts(
-                    InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)),
-                    InetAddress.getByAddress(byteArrayOf(8, 8, 4, 4)),
-                )
-                .build(),
-            DnsOverHttps.Builder()
-                .client(bootstrap)
-                .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
-                .bootstrapDnsHosts(
-                    InetAddress.getByAddress(byteArrayOf(1, 1, 1, 1)),
-                    InetAddress.getByAddress(byteArrayOf(1, 0, 0, 1)),
-                )
-                .build(),
-        )
-        object : Dns {
-            override fun lookup(hostname: String): List<InetAddress> {
-                try {
-                    return Dns.SYSTEM.lookup(hostname)
-                } catch (original: UnknownHostException) {
-                    for (backup in backups) {
-                        try {
-                            return backup.lookup(hostname)
-                        } catch (ignored: Exception) {
-                            // try the next resolver
-                        }
-                    }
-                    throw original
-                }
-            }
-        }
-    }
+    private val resilientDns: Dns get() = ResilientDns
 
     private val service: GeminiApiService by lazy {
         val client = OkHttpClient.Builder()

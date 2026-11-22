@@ -77,4 +77,30 @@ interface RoutineDao {
 
     @Query("DELETE FROM courses")
     suspend fun clearCourses()
+
+    // ---- Attendance ----
+
+    @Query("SELECT * FROM attendance")
+    fun observeAttendance(): Flow<List<AttendanceEntity>>
+
+    @Query("SELECT * FROM attendance")
+    suspend fun getAttendance(): List<AttendanceEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAttendance(mark: AttendanceEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAttendance(marks: List<AttendanceEntity>)
+
+    @Query("DELETE FROM attendance WHERE courseKey = :courseKey AND date = :date AND startTime = :startTime")
+    suspend fun deleteAttendance(courseKey: String, date: String, startTime: String)
+
+    @Query("DELETE FROM attendance")
+    suspend fun clearAttendance()
+
+    @Transaction
+    suspend fun replaceAttendance(marks: List<AttendanceEntity>) {
+        clearAttendance()
+        insertAttendance(marks)
+    }
 }

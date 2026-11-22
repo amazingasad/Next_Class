@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,7 +29,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.ui.screens.ApiKeyGuideScreen
+import com.example.nextclass.ui.screens.AttendanceScreen
 import com.example.nextclass.ui.screens.CoursesScreen
 import com.example.nextclass.ui.screens.HomeScreen
 import com.example.nextclass.ui.screens.ImportRoutineScreen
@@ -37,7 +40,7 @@ import com.example.nextclass.ui.screens.WeekScreen
 import com.example.nextclass.worker.AlarmHelper
 import com.example.nextclass.worker.NotificationHelper
 
-private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE }
+private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE }
 
 @Composable
 fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
@@ -59,6 +62,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val selectedDay by viewModel.selectedDay.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val importState by viewModel.importState.collectAsStateWithLifecycle()
+    val marks by viewModel.attendance.collectAsStateWithLifecycle()
+    val attendanceSummary by viewModel.attendanceSummary.collectAsStateWithLifecycle()
+    val updateState by viewModel.update.collectAsStateWithLifecycle()
+    val updateDismissed by viewModel.updateDismissed.collectAsStateWithLifecycle()
 
     // Bumped on every resume so permission status is re-read after the user returns from system settings.
     var resumeTick by remember { mutableIntStateOf(0) }
@@ -72,6 +79,35 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     ) {
         resumeTick++
         viewModel.refreshSchedule()
+    }
+
+    val batteryUnrestricted = remember(resumeTick) {
+        val power = context.getSystemService(PowerManager::class.java)
+        power?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    }
+    val requestBattery: () -> Unit = {
+        val packageUri = Uri.parse("package:" + context.packageName)
+        val attempts = listOf(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData(packageUri),
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(packageUri),
+        )
+        for (intent in attempts) {
+            val opened = try {
+                context.startActivity(intent)
+                true
+            } catch (e: Exception) {
+                false
+            }
+            if (opened) break
+        }
+    }
+    val openUpdate: (String) -> Unit = { url ->
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            // No browser available; nothing else to do.
+        }
     }
 
     val notificationsGranted = remember(resumeTick) { NotificationHelper.hasPermission(context) }
@@ -112,6 +148,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
     BackHandler(enabled = screen == Screen.IMPORT) { leaveImport() }
     BackHandler(enabled = screen == Screen.SETTINGS) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.ATTENDANCE) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.WEEK) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.GUIDE) { screen = guideFrom }
     BackHandler(enabled = screen == Screen.COURSES) {
@@ -148,6 +185,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onSettings = { screen = Screen.SETTINGS },
                 onCourses = { screen = Screen.COURSES },
                 onWeek = { screen = Screen.WEEK },
+                onAttendance = { screen = Screen.ATTENDANCE },
                 hasApiKey = settings.hasKey,
                 onKeyGuide = openGuide,
                 onCancelledChange = viewModel::setCancelled,
@@ -156,6 +194,14 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onSaveSession = viewModel::saveSession,
                 onDeleteSession = viewModel::deleteSession,
                 onRequestNotifications = requestNotifications,
+                marks = marks,
+                onMark = viewModel::markAttendance,
+                update = if (updateDismissed) null else updateState as? UpdateState.Available,
+                onOpenUpdate = openUpdate,
+                onDismissUpdate = viewModel::dismissUpdateBanner,
+                showBatteryNotice = !batteryUnrestricted && !settings.batteryNoticeHidden,
+                onRequestBattery = requestBattery,
+                onHideBatteryNotice = viewModel::hideBatteryNotice,
             )
 
             Screen.IMPORT -> ImportRoutineScreen(
@@ -191,6 +237,12 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onRestoreBackup = { restoreLauncher.launch(arrayOf("*/*")) },
                 onImportShared = viewModel::importShared,
                 onOpenGuide = openGuide,
+                batteryUnrestricted = batteryUnrestricted,
+                onRequestBattery = requestBattery,
+                updateState = updateState,
+                currentBuild = viewModel.currentBuild,
+                onCheckUpdate = viewModel::checkForUpdate,
+                onOpenUpdate = openUpdate,
             )
 
             Screen.COURSES -> CoursesScreen(
@@ -216,6 +268,17 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                     viewModel.selectDay(day)
                     screen = Screen.HOME
                 },
+            )
+
+            Screen.ATTENDANCE -> AttendanceScreen(
+                summary = attendanceSummary,
+                sessions = sessions.orEmpty(),
+                overrides = overrides,
+                marks = marks,
+                now = now,
+                onBack = { screen = Screen.HOME },
+                onMark = viewModel::markAttendance,
+                onClearCourse = viewModel::clearAttendanceFor,
             )
 
             Screen.GUIDE -> ApiKeyGuideScreen(
