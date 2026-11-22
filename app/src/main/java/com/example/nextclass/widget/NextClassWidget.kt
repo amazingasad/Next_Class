@@ -192,7 +192,21 @@ class NextClassWidget : GlanceAppWidget() {
                         }
                     } else {
                         LazyColumn(modifier = GlanceModifier.fillMaxWidth().fillMaxHeight()) {
-                            items(model.rows, itemId = { it.id }) { session ->
+                            // The item id changes with the status, so Android redraws the row after a tap on
+                            // Present or Absent instead of reusing the cached one.
+                            items(
+                                model.rows,
+                                itemId = { row ->
+                                    val statusCode = when (model.marks[row.id]) {
+                                        true -> 1L
+                                        false -> 2L
+                                        null -> 0L
+                                    }
+                                    val focusCode = if (row.id == model.focusId) 4L else 0L
+                                    val pastCode = if (row.endMinutes <= model.nowMinutes) 8L else 0L
+                                    row.id * 16L + statusCode + focusCode + pastCode
+                                },
+                            ) { session ->
                                 SessionRow(
                                     session = session,
                                     past = session.endMinutes <= model.nowMinutes,
