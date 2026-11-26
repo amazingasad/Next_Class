@@ -9,6 +9,7 @@ import com.example.nextclass.data.local.effectiveSessions
 import com.example.nextclass.domain.usecase.GetCurrentOrNextClassUseCase
 import com.example.nextclass.domain.usecase.ScheduleDailyFirstClassAlarmUseCase
 import com.example.nextclass.worker.AlarmHelper
+import com.example.nextclass.worker.PlanReminderScheduler
 import com.example.nextclass.worker.WidgetTransitionReceiver
 import java.time.LocalDateTime
 
@@ -19,14 +20,18 @@ object WidgetUpdateHelper {
         val appContext = context.applicationContext
         val dao = AppDatabase.getInstance(appContext).routineDao()
         dao.deleteOverridesBefore(java.time.LocalDate.now().toString())
+        AppDatabase.getInstance(appContext).plannerDao()
+            .deleteTasksBefore(java.time.LocalDate.now().minusDays(14).toString())
         updateWidgets(appContext)
         scheduleNextTransition(appContext)
+        PlanReminderScheduler.schedule(appContext)
         ScheduleDailyFirstClassAlarmUseCase(appContext, dao, AppPreferences(appContext)).invoke()
     }
 
     suspend fun updateWidgets(context: Context) {
         NextClassWidget().updateAll(context.applicationContext)
         NextClassCompactWidget().updateAll(context.applicationContext)
+        NextClassPlannerWidget().updateAll(context.applicationContext)
     }
 
     /**

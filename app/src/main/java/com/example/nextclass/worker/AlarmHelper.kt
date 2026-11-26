@@ -13,6 +13,7 @@ object AlarmHelper {
     const val REQ_TRANSITION = 1001
     const val REQ_FIRST_CLASS = 1002
     const val REQ_MIDNIGHT = 1003
+    const val REQ_PLAN = 1004
 
     fun pending(context: Context, requestCode: Int, intent: Intent): PendingIntent =
         PendingIntent.getBroadcast(

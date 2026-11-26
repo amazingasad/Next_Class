@@ -3,6 +3,7 @@ package com.example.nextclass.data.local
 import android.util.Base64
 import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.Note
 import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.SessionType
@@ -40,12 +41,20 @@ data class BundleAttendance(
 )
 
 @Serializable
+data class BundleNote(
+    val title: String = "",
+    val body: String = "",
+    val pinned: Boolean = false,
+)
+
+@Serializable
 data class RoutineBundle(
     val app: String = "nextclass",
     val version: Int = 1,
     val sessions: List<BundleSession> = emptyList(),
     val courses: List<BundleCourse> = emptyList(),
     val attendance: List<BundleAttendance> = emptyList(),
+    val notes: List<BundleNote> = emptyList(),
 )
 
 /** Turns the routine into a backup file or a short share code, and back. */
@@ -61,6 +70,7 @@ object RoutineCodec {
         sessions: List<ClassSession>,
         courses: List<Course>,
         attendance: List<AttendanceMark> = emptyList(),
+        notes: List<Note> = emptyList(),
     ): RoutineBundle = RoutineBundle(
         sessions = sessions.map {
             BundleSession(
@@ -74,6 +84,7 @@ object RoutineCodec {
             )
         },
         courses = courses.map { BundleCourse(code = it.code, title = it.title) },
+        notes = notes.map { BundleNote(title = it.title, body = it.body, pinned = it.pinned) },
         attendance = attendance.map {
             BundleAttendance(course = it.courseKey, date = it.date, start = it.startTime, present = it.present)
         },
@@ -157,6 +168,9 @@ object RoutineCodec {
 
     fun toCourses(bundle: RoutineBundle): List<Course> =
         bundle.courses.map { Course(code = it.code, title = it.title) }
+
+    fun toNotes(bundle: RoutineBundle): List<BundleNote> =
+        bundle.notes.filter { it.title.isNotBlank() || it.body.isNotBlank() }
 
     fun toAttendance(bundle: RoutineBundle): List<AttendanceMark> = bundle.attendance.map {
         AttendanceMark(courseKey = it.course, date = it.date, startTime = it.start, present = it.present)

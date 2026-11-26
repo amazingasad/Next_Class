@@ -5,6 +5,11 @@
     <string name="widget_compact_description">A single row with only the current or next class</string>
     <string name="channel_first_class_name">First class of the day</string>
     <string name="channel_first_class_description">One reminder before your first class each day</string>
+    <string name="channel_plan_name">Plan tomorrow</string>
+    <string name="channel_plan_description">One evening reminder to add tomorrow's tasks</string>
+    <string name="widget_planner_description">Your pinned study note and today's tasks, with a tap to flip pages</string>
+    <string name="cd_plan">Plan</string>
+    <string name="cd_week_open">Open week</string>
     <string name="cd_back">Back</string>
     <string name="cd_import_routine">Import routine</string>
     <string name="cd_courses">Courses</string>

@@ -72,6 +72,8 @@ fun SettingsScreen(
     onDismissMessage: () -> Unit,
     onWidgetTheme: (Int) -> Unit,
     onDynamicColor: (Boolean) -> Unit,
+    onPlanEnabled: (Boolean) -> Unit,
+    onPlanMinutes: (Int) -> Unit,
     onShare: () -> Unit,
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -240,6 +242,61 @@ fun SettingsScreen(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onLeadMinutes(minutes)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
+            // ---- Plan reminder ----
+            MicroLabel("Evening plan reminder")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Ask me to plan tomorrow",
+                        style = NcText.Title,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "One notification each evening, only if tomorrow has no tasks yet.",
+                        style = NcText.Body,
+                        color = NcTheme.extras.muted,
+                    )
+                }
+                Switch(
+                    checked = state.planEnabled,
+                    onCheckedChange = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onPlanEnabled(it)
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.surface,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSurface,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSurface,
+                        uncheckedThumbColor = NcTheme.extras.muted,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        uncheckedBorderColor = NcTheme.extras.hairline,
+                    ),
+                )
+            }
+            MicroLabel("Reminder time")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                AppPreferences.PLAN_OPTIONS.forEach { minutes ->
+                    SelectPill(
+                        label = com.example.nextclass.domain.model.TimeFormat.clock12(
+                            "%02d:%02d".format(minutes / 60, minutes % 60),
+                        ).replace(":00", ""),
+                        selected = state.planMinutes == minutes,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onPlanMinutes(minutes)
                         },
                         modifier = Modifier.weight(1f),
                     )

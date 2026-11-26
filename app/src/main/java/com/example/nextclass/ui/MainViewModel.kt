@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.nextclass.data.local.ApiKeyManager
 import com.example.nextclass.data.local.AppDatabase
 import com.example.nextclass.data.local.AppPreferences
+import com.example.nextclass.data.local.NoteEntity
+import com.example.nextclass.data.local.TaskEntity
 import com.example.nextclass.data.local.RoutineCodec
 import com.example.nextclass.data.local.RoutineBundle
 import com.example.nextclass.data.local.toDomain
@@ -17,6 +19,8 @@ import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.AttendanceMath
 import com.example.nextclass.domain.model.CourseAttendance
+import com.example.nextclass.domain.model.Note
+import com.example.nextclass.domain.model.PlannerTask
 import com.example.nextclass.domain.model.Semester
 import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.ClassSession
@@ -33,7 +37,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -72,6 +79,8 @@ data class SettingsUiState(
     val widgetTheme: Int = 0,
     val batteryNoticeHidden: Boolean = false,
     val dynamicColor: Boolean = false,
+    val planEnabled: Boolean = true,
+    val planMinutes: Int = AppPreferences.DEFAULT_PLAN_MINUTES,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -80,6 +89,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val keyManager = ApiKeyManager(application)
     private val preferences = AppPreferences(application)
     private val repository = RoutineParserRepository(application, keyManager)
+    private val planner = AppDatabase.getInstance(application).plannerDao()
     private val resolver = GetCurrentOrNextClassUseCase()
     private val updateChecker = UpdateChecker(application)
 
@@ -105,6 +115,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val courses: StateFlow<List<Course>> = dao.observeCourses()
         .map { rows -> rows.map { it.toDomain() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tasks: StateFlow<List<PlannerTask>> = now
+        .map { it.toLocalDate() }
+        .distinctUntilChanged()
+        .flatMapLatest { today -> planner.observeTasks(today.toString()) }
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val notes: StateFlow<List<Note>> = planner.observeNotes()
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _openRequest = MutableStateFlow<String?>(null)
+    val openRequest: StateFlow<String?> = _openRequest.asStateFlow()
 
     val semesters: StateFlow<List<Semester>> = dao.observeSemesters()
         .map { rows -> rows.map { it.toDomain() } }
@@ -137,6 +162,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             widgetTheme = preferences.widgetTheme,
             batteryNoticeHidden = preferences.batteryNoticeHidden,
             dynamicColor = preferences.dynamicColor,
+            planEnabled = preferences.planReminderEnabled,
+            planMinutes = preferences.planMinutes,
         ),
     )
     val settings: StateFlow<SettingsUiState> = _settings.asStateFlow()
@@ -252,6 +279,83 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             dao.getAttendance().filter { it.courseKey == courseKey }.forEach {
                 dao.deleteAttendance(it.courseKey, it.date, it.startTime)
             }
+        }
+    }
+
+    // ---- Planner -----------------------------------------------------------------------
+
+    fun requestOpen(kind: String) {
+        _openRequest.value = kind
+    }
+
+    fun consumeOpenRequest() {
+        _openRequest.value = null
+    }
+
+    private fun afterPlannerChange() {
+        viewModelScope.launch(Dispatchers.Default) {
+            WidgetUpdateHelper.updateWidgets(getApplication())
+        }
+    }
+
+    fun addTask(date: LocalDate, title: String) {
+        val clean = title.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            planner.insertTask(TaskEntity(date = date.toString(), title = clean))
+            afterPlannerChange()
+        }
+    }
+
+    fun toggleTask(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            planner.toggle(id)
+            afterPlannerChange()
+        }
+    }
+
+    fun deleteTask(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            planner.deleteTask(id)
+            afterPlannerChange()
+        }
+    }
+
+    /** Copies the chosen tasks to [toDate] as not done, skipping titles that are already there. */
+    fun carryOver(ids: Set<Long>, toDate: LocalDate) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = planner.tasksOn(toDate.toString()).map { it.title.lowercase() }.toSet()
+            val source = tasks.value.filter { it.id in ids }
+            val copies = source
+                .filter { it.title.lowercase() !in existing }
+                .distinctBy { it.title.lowercase() }
+                .map { TaskEntity(date = toDate.toString(), title = it.title) }
+            if (copies.isNotEmpty()) planner.insertTasks(copies)
+            afterPlannerChange()
+        }
+    }
+
+    fun saveNote(id: Long, title: String, body: String, pinned: Boolean) {
+        if (title.isBlank() && body.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            planner.saveNote(
+                NoteEntity(
+                    id = id,
+                    title = title.trim(),
+                    body = body.trim(),
+                    pinned = pinned,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+            afterPlannerChange()
+        }
+    }
+
+    fun deleteNote(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            planner.deleteNote(id)
+            afterPlannerChange()
         }
     }
 
@@ -423,6 +527,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshSchedule()
     }
 
+    fun setPlanEnabled(enabled: Boolean) {
+        preferences.planReminderEnabled = enabled
+        _settings.update { it.copy(planEnabled = enabled) }
+        refreshSchedule()
+    }
+
+    fun setPlanMinutes(minutes: Int) {
+        preferences.planMinutes = minutes
+        _settings.update { it.copy(planMinutes = minutes) }
+        refreshSchedule()
+    }
+
     fun setDynamicColor(enabled: Boolean) {
         preferences.dynamicColor = enabled
         _settings.update { it.copy(dynamicColor = enabled) }
@@ -500,6 +616,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             dao.getAll().map { it.toDomain() },
             dao.getCourses().map { it.toDomain() },
             dao.getAttendance().map { it.toDomain() },
+            planner.getNotes().map { it.toDomain() },
         )
     }
 
@@ -509,7 +626,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (bundle.sessions.isEmpty()) {
                 _message.value = "Nothing to share yet. Import a routine first."
             } else {
-                onReady(RoutineCodec.shareMessage(bundle.copy(attendance = emptyList())))
+                onReady(RoutineCodec.shareMessage(bundle.copy(attendance = emptyList(), notes = emptyList())))
             }
         }
     }
@@ -566,6 +683,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val marks = RoutineCodec.toAttendance(bundle)
             if (marks.isNotEmpty()) {
                 dao.replaceAttendance(marks.map { it.toEntity() })
+            }
+            val noteList = RoutineCodec.toNotes(bundle)
+            if (noteList.isNotEmpty()) {
+                planner.replaceNotes(
+                    noteList.map { NoteEntity(title = it.title, body = it.body, pinned = it.pinned) },
+                )
             }
             applyCourseTitles()
         }

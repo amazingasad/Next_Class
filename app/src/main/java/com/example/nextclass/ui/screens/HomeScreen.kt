@@ -93,6 +93,7 @@ fun HomeScreen(
     onSelectDay: (Int) -> Unit,
     onImport: () -> Unit,
     onCourses: () -> Unit,
+    onWeek: () -> Unit,
     semesters: List<Semester>,
     onSwitchSemester: (Long) -> Unit,
     onAddSemester: (String) -> Unit,
@@ -135,6 +136,7 @@ fun HomeScreen(
             onSemester = { showSemesters = true },
             onImport = onImport,
             onCourses = onCourses,
+            onWeek = onWeek,
         )
 
         if (sessions == null) return@Column
@@ -522,6 +524,7 @@ private fun TopBar(
     onSemester: () -> Unit,
     onImport: () -> Unit,
     onCourses: () -> Unit,
+    onWeek: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val chipShape = RoundedCornerShape(20.dp)
@@ -551,6 +554,13 @@ private fun TopBar(
                 )
             }
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = onWeek) {
+                Icon(
+                    imageVector = Icons.Rounded.CalendarViewWeek,
+                    contentDescription = stringResource(R.string.cd_week_open),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(

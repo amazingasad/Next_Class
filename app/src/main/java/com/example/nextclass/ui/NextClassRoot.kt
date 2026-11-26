@@ -48,13 +48,14 @@ import com.example.nextclass.ui.screens.ApiKeyGuideScreen
 import com.example.nextclass.ui.screens.AttendanceScreen
 import com.example.nextclass.ui.screens.CoursesScreen
 import com.example.nextclass.ui.screens.HomeScreen
+import com.example.nextclass.ui.screens.PlanScreen
 import com.example.nextclass.ui.screens.ImportRoutineScreen
 import com.example.nextclass.ui.screens.SettingsScreen
 import com.example.nextclass.ui.screens.WeekScreen
 import com.example.nextclass.worker.AlarmHelper
 import com.example.nextclass.worker.NotificationHelper
 
-private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE }
+private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE, PLAN }
 
 @Composable
 fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
@@ -76,6 +77,30 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val selectedDay by viewModel.selectedDay.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val importState by viewModel.importState.collectAsStateWithLifecycle()
+    val planTasks by viewModel.tasks.collectAsStateWithLifecycle()
+    val planNotes by viewModel.notes.collectAsStateWithLifecycle()
+    val openRequest by viewModel.openRequest.collectAsStateWithLifecycle()
+    var planTab by rememberSaveable { mutableIntStateOf(0) }
+    var planSheet by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(openRequest) {
+        val request = openRequest ?: return@LaunchedEffect
+        when (request) {
+            "plan" -> {
+                planTab = 0
+                planSheet = true
+                screen = Screen.PLAN
+            }
+            "tasks" -> {
+                planTab = 0
+                screen = Screen.PLAN
+            }
+            "notes" -> {
+                planTab = 1
+                screen = Screen.PLAN
+            }
+        }
+        viewModel.consumeOpenRequest()
+    }
     val semesters by viewModel.semesters.collectAsStateWithLifecycle()
     val marks by viewModel.attendance.collectAsStateWithLifecycle()
     val attendanceSummary by viewModel.attendanceSummary.collectAsStateWithLifecycle()
@@ -163,6 +188,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
     BackHandler(enabled = screen == Screen.IMPORT) { leaveImport() }
     BackHandler(enabled = screen == Screen.SETTINGS) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.PLAN) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.ATTENDANCE) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.WEEK) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.GUIDE) { screen = guideFrom }
@@ -173,7 +199,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
 
     val dockTab = when (screen) {
         Screen.HOME -> DockTab.TODAY
-        Screen.WEEK -> DockTab.WEEK
+        Screen.PLAN -> DockTab.PLAN
         Screen.ATTENDANCE -> DockTab.ATTENDANCE
         Screen.SETTINGS -> DockTab.SETTINGS
         else -> null
@@ -181,7 +207,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val selectTab: (DockTab) -> Unit = { tab ->
         screen = when (tab) {
             DockTab.TODAY -> Screen.HOME
-            DockTab.WEEK -> Screen.WEEK
+            DockTab.PLAN -> Screen.PLAN
             DockTab.ATTENDANCE -> Screen.ATTENDANCE
             DockTab.SETTINGS -> Screen.SETTINGS
         }
@@ -196,10 +222,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
-            val topLevel = setOf(Screen.HOME, Screen.WEEK, Screen.ATTENDANCE, Screen.SETTINGS)
+            val topLevel = setOf(Screen.HOME, Screen.PLAN, Screen.ATTENDANCE, Screen.SETTINGS)
             if (initialState in topLevel && targetState in topLevel) {
                 // Siblings in the dock: a short horizontal drift with a fade-through.
-                val order = listOf(Screen.HOME, Screen.WEEK, Screen.ATTENDANCE, Screen.SETTINGS)
+                val order = listOf(Screen.HOME, Screen.PLAN, Screen.ATTENDANCE, Screen.SETTINGS)
                 val direction = if (order.indexOf(targetState) > order.indexOf(initialState)) 1 else -1
                 (
                     slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> direction * w / 10 } +
@@ -235,6 +261,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onSelectDay = viewModel::selectDay,
                 onImport = { screen = Screen.IMPORT },
                 onCourses = { screen = Screen.COURSES },
+                onWeek = { screen = Screen.WEEK },
                 semesters = semesters,
                 onSwitchSemester = viewModel::switchSemester,
                 onAddSemester = viewModel::addSemester,
@@ -287,6 +314,8 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onDismissMessage = viewModel::dismissMessage,
                 onWidgetTheme = viewModel::setWidgetTheme,
                 onDynamicColor = viewModel::setDynamicColor,
+                onPlanEnabled = viewModel::setPlanEnabled,
+                onPlanMinutes = viewModel::setPlanMinutes,
                 onShare = shareRoutine,
                 onExportBackup = { exportLauncher.launch("nextclass-backup.json") },
                 onRestoreBackup = { restoreLauncher.launch(arrayOf("*/*")) },
@@ -323,6 +352,22 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                     viewModel.selectDay(day)
                     screen = Screen.HOME
                 },
+            )
+
+            Screen.PLAN -> PlanScreen(
+                tasks = planTasks,
+                notes = planNotes,
+                now = now,
+                tab = planTab,
+                onTab = { planTab = it },
+                showPlanSheet = planSheet,
+                onPlanSheet = { planSheet = it },
+                onAddTask = viewModel::addTask,
+                onToggleTask = viewModel::toggleTask,
+                onDeleteTask = viewModel::deleteTask,
+                onKeepTasks = viewModel::carryOver,
+                onSaveNote = viewModel::saveNote,
+                onDeleteNote = viewModel::deleteNote,
             )
 
             Screen.ATTENDANCE -> AttendanceScreen(

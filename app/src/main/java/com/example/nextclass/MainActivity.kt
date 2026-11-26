@@ -16,6 +16,24 @@ import com.example.nextclass.ui.theme.NextClassTheme
 
 class MainActivity : ComponentActivity() {
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOpen(intent)
+    }
+
+    private fun handleOpen(intent: android.content.Intent?) {
+        intent?.getStringExtra(EXTRA_OPEN)?.let { viewModel.requestOpen(it) }
+        intent?.removeExtra(EXTRA_OPEN)
+    }
+
+    companion object {
+        const val EXTRA_OPEN = "nextclass_open"
+        const val OPEN_PLAN = "plan"
+        const val OPEN_NOTES = "notes"
+        const val OPEN_TASKS = "tasks"
+    }
+
     private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,6 +43,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        handleOpen(intent)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }

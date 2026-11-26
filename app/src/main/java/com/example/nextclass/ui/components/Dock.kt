@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CalendarViewWeek
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.FactCheck
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Today
@@ -47,7 +47,7 @@ import com.example.nextclass.ui.theme.NcTheme
 
 enum class DockTab(val label: String, val icon: ImageVector) {
     TODAY("Today", Icons.Rounded.Today),
-    WEEK("Week", Icons.Rounded.CalendarViewWeek),
+    PLAN("Plan", Icons.Rounded.Checklist),
     ATTENDANCE("Attendance", Icons.Rounded.FactCheck),
     SETTINGS("Settings", Icons.Rounded.Settings),
 }

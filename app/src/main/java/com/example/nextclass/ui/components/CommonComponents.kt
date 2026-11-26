@@ -196,6 +196,8 @@ fun NcTextField(
     isError: Boolean = false,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     trailing: (@Composable () -> Unit)? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
 ) {
     val colors = MaterialTheme.colorScheme
     OutlinedTextField(
@@ -208,7 +210,8 @@ fun NcTextField(
         } else {
             null
         },
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = minLines,
         isError = isError,
         shape = RoundedCornerShape(12.dp),
         textStyle = NcText.Body.copy(color = colors.onSurface),

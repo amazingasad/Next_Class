@@ -14,13 +14,17 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CourseEntity::class,
         AttendanceEntity::class,
         SemesterEntity::class,
+        TaskEntity::class,
+        NoteEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun routineDao(): RoutineDao
+
+    abstract fun plannerDao(): PlannerDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -60,6 +64,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `tasks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`date` TEXT NOT NULL, `title` TEXT NOT NULL, `done` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `notes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`title` TEXT NOT NULL, `body` TEXT NOT NULL, `pinned` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL)",
+                )
+            }
+        }
+
         private val FIRST_SEMESTER = object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 db.execSQL("INSERT INTO `semesters` (`id`, `name`, `active`) VALUES (1, 'Semester 1', 1)")
@@ -75,7 +94,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nextclass.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .addCallback(FIRST_SEMESTER).build().also { instance = it }
             }
     }
