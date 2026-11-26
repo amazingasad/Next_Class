@@ -3,6 +3,9 @@ package com.example.nextclass.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
@@ -72,6 +75,15 @@ class NextClassWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val initial = load(context)
+        provideContent {
+            val tick by WidgetTicker.tick.collectAsState()
+            val model by produceState(initial, tick) { value = load(context) }
+            WidgetContent(model)
+        }
+    }
+
+    private suspend fun load(context: Context): Model {
         val sessions = AppDatabase.getInstance(context).routineDao().effectiveSessions()
         val prefs = AppPreferences(context)
         val themeMode = prefs.widgetTheme
@@ -112,7 +124,7 @@ class NextClassWidget : GlanceAppWidget() {
             )
             NextClassState.NoClasses -> Model(state, emptyList(), nowMinutes, null, themeMode, dynamic, emptyMap())
         }
-        provideContent { WidgetContent(model) }
+        return model
     }
 
     private companion object {

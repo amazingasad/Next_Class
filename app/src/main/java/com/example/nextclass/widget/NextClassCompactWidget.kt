@@ -3,6 +3,9 @@ package com.example.nextclass.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,12 +50,26 @@ class NextClassCompactWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Single
 
+    private data class Snapshot(
+        val state: NextClassState,
+        val themeMode: Int,
+        val dynamic: Boolean,
+        val status: Boolean?,
+    )
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val initial = load(context)
+        provideContent {
+            val tick by WidgetTicker.tick.collectAsState()
+            val snapshot by produceState(initial, tick) { value = load(context) }
+            Content(snapshot.state, snapshot.themeMode, snapshot.dynamic, snapshot.status)
+        }
+    }
+
+    private suspend fun load(context: Context): Snapshot {
         val sessions = AppDatabase.getInstance(context).routineDao().effectiveSessions()
         val state = GetCurrentOrNextClassUseCase().invoke(sessions, LocalDateTime.now())
         val prefs = AppPreferences(context)
-        val themeMode = prefs.widgetTheme
-        val dynamic = prefs.dynamicColor
         val focus = state.focusSession
         val today = LocalDateTime.now().toLocalDate().toString()
         val status = if (focus == null) {
@@ -64,7 +81,7 @@ class NextClassCompactWidget : GlanceAppWidget() {
                     it.startTime == focus.startTime
             }?.let { it.status == "P" }
         }
-        provideContent { Content(state, themeMode, dynamic, status) }
+        return Snapshot(state, prefs.widgetTheme, prefs.dynamicColor, status)
     }
 
     @Composable

@@ -29,6 +29,7 @@ object WidgetUpdateHelper {
     }
 
     suspend fun updateWidgets(context: Context) {
+        WidgetTicker.bump()
         NextClassWidget().updateAll(context.applicationContext)
         NextClassCompactWidget().updateAll(context.applicationContext)
         NextClassPlannerWidget().updateAll(context.applicationContext)

@@ -271,6 +271,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     AttendanceMark(key, date.toString(), session.startTime, present).toEntity(),
                 )
             }
+            WidgetUpdateHelper.updateWidgets(getApplication())
         }
     }
 
@@ -279,6 +280,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             dao.getAttendance().filter { it.courseKey == courseKey }.forEach {
                 dao.deleteAttendance(it.courseKey, it.date, it.startTime)
             }
+            WidgetUpdateHelper.updateWidgets(getApplication())
         }
     }
 

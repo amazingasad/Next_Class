@@ -3,6 +3,9 @@ package com.example.nextclass.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,20 +61,28 @@ class NextClassPlannerWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val initial = load(context)
+        provideContent {
+            val tick by WidgetTicker.tick.collectAsState()
+            val model by produceState(initial, tick) { value = load(context) }
+            Content(model)
+        }
+    }
+
+    private suspend fun load(context: Context): Model {
         val prefs = AppPreferences(context)
         val dao = AppDatabase.getInstance(context).plannerDao()
         val notes = dao.getNotes().map { it.toDomain() }
         val note = notes.firstOrNull { it.pinned } ?: notes.firstOrNull()
         val today = LocalDate.now().toString()
         val tasks = dao.tasksOn(today).map { it.toDomain() }
-        val model = Model(
+        return Model(
             page = prefs.plannerPage.coerceIn(0, 1),
             note = note,
             tasks = tasks,
             themeMode = prefs.widgetTheme,
             dynamic = prefs.dynamicColor,
         )
-        provideContent { Content(model) }
     }
 
     @Composable
