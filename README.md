@@ -8,13 +8,33 @@ Built for a small private group of students. Each person brings their own free G
 
 These are design previews of the main screens, drawn to match the app's layout and palette. Replace them with real device screenshots in `docs/images` when you have them.
 
+**Schedule**
+
 <p align="center">
   <img src="docs/images/home.png" width="230" alt="Home with timeline rail and dock" />
+  <img src="docs/images/widget.png" width="230" alt="Routine widget with attendance buttons" />
   <img src="docs/images/attendance.png" width="230" alt="Attendance tracker" />
-  <img src="docs/images/api-key-wizard.png" width="230" alt="API key step cards" />
 </p>
+
+**To-do list and notes**
+
 <p align="center">
-  <img src="docs/images/widget.png" width="230" alt="Widget with attendance buttons" />
+  <img src="docs/images/plan-todo.png" width="230" alt="Daily to-do list" />
+  <img src="docs/images/plan-tomorrow.png" width="230" alt="Plan tomorrow sheet that keeps unfinished tasks" />
+  <img src="docs/images/plan-notes.png" width="230" alt="Study notes" />
+</p>
+
+**Planner widget (note page, then tasks page)**
+
+<p align="center">
+  <img src="docs/images/planner-widget-note.png" width="340" alt="Planner widget showing the pinned study note" />
+  <img src="docs/images/planner-widget-tasks.png" width="340" alt="Planner widget showing today's tasks" />
+</p>
+
+**Setup and semesters**
+
+<p align="center">
+  <img src="docs/images/api-key-wizard.png" width="230" alt="API key step cards" />
   <img src="docs/images/semesters.png" width="230" alt="Semester switcher" />
 </p>
 
@@ -45,8 +65,12 @@ These are design previews of the main screens, drawn to match the app's layout a
 - **Multiple semesters.** Tap the semester chip on Home to add, switch, rename or delete semesters. Each one has its own classes, courses and attendance, and only the active one drives the widgets and the reminder. Existing data moves into "Semester 1". Backups and share codes cover the active semester.
 - **Widget attendance buttons.** The ongoing class in both widgets has Present and Absent buttons. Tap the chosen one again to clear it.
 - **Material You.** Settings, Appearance: keep the NextClass look or take colors from your wallpaper (Android 12+), in the app and on the widgets.
-- **New navigation and look.** A floating dock for Today, Week, Attendance and Settings; a timeline rail with a pulsing live node; a large day header; softer corners.
+- **New navigation and look.** A floating dock for Today, Plan, Attendance and Settings (Week is the calendar icon on Home); a timeline rail with a pulsing live node; a large day header; softer corners.
 - **Key setup cards.** The API key guide is a deck of step cards with Next and Back, an Open AI Studio button, and paste-and-verify on the last card.
+- **Daily to-do list.** Plan tab, To-do: add tasks for today or tomorrow, tick them off, delete them. Tasks are kept per date and old ones clear themselves after two weeks.
+- **Evening plan reminder.** At a time you choose in Settings (7, 8, 9 or 10 PM) NextClass asks you to plan tomorrow, and stays quiet if tomorrow already has tasks. The plan sheet lists today's tasks with unfinished ones ticked, so one tap keeps them for tomorrow, and you can add new tasks in the same place. This is a second, separate notification from the first-class reminder, and you can turn it off.
+- **Study notes.** Plan tab, Notes: keep your study process, for example "revise the previous topic before starting a new one", with a ready-made study routine template. Pin one note to show it on the widget. Notes are included in backup files, not in share codes.
+- **Planner widget.** One widget, "NextClass (notes and tasks)": the first page is your pinned note and the second page is today's tasks. Tap the arrows or the page name to flip pages, and tap a task to tick it. Android widgets built with Glance cannot swipe between pages, so the arrows do the flipping.
 - **One notification per day.** A single reminder for the first class of the day, with a configurable lead time (15, 30 or 45 minutes). No reminders for later classes.
 - **No background polling.** The widget refreshes through one exact alarm set for the next start or end time.
 - **Private by design.** The API key is stored with `EncryptedSharedPreferences` and never leaves the device except in requests to Google.
