@@ -47,6 +47,7 @@ These are design previews of the main screens, drawn to match the app's layout a
   - the ongoing class, or the next one when nothing is running, is highlighted with a vermilion accent
   - classes that already finished are faded
   - once the last class is over, the widget shows the next scheduled day
+- **Study suggestions.** The Today screen looks at the free time on the selected day. On an off day it suggests several study blocks. On a class day it suggests one or two blocks in the longest gaps, preferring courses you just had or will have soon. Tap Add task to put a block on your to-do list.
 - **Compact widget.** A one-row widget, "NextClass (compact)", that shows only the ongoing or next class.
 - **Widget theme.** Follow the phone, or force light or dark, in Settings.
 - **12-hour time.** Times show as `09:00 AM` everywhere, and you can type times as `9:00 AM`, `2:30 pm` or `14:30`.
