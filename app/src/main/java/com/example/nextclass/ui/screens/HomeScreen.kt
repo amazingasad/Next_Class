@@ -56,7 +56,10 @@ import com.example.nextclass.R
 import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.ClassOverride
+import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.model.CourseCodes
+import com.example.nextclass.domain.model.StudyPlanner
+import com.example.nextclass.ui.components.StudySuggestionCard
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.DayNames
 import com.example.nextclass.domain.model.NextClassState
@@ -115,6 +118,8 @@ fun HomeScreen(
     showBatteryNotice: Boolean,
     onRequestBattery: () -> Unit,
     onHideBatteryNotice: () -> Unit,
+    courses: List<Course>,
+    onAddStudyTask: (LocalDate, String) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var editing by remember { mutableStateOf<ClassSession?>(null) }
@@ -325,6 +330,20 @@ fun HomeScreen(
 
                         is DayEntry.Gap -> Column(Modifier.animateItem()) { GapRow(entry.minutes) }
                     }
+                }
+
+                item(key = "study") {
+                    val isToday = selectedDate == now.toLocalDate()
+                    val nowMin = if (isToday) now.hour * 60 + now.minute else null
+                    val plan = remember(sessions, overrides, courses, selectedDate, nowMin) {
+                        StudyPlanner.plan(selectedDate, sessions, overrides, courses, nowMin)
+                    }
+                    StudySuggestionCard(
+                        plan = plan,
+                        dateKey = selectedDate.toString(),
+                        onAdd = { slot -> onAddStudyTask(selectedDate, slot.taskTitle) },
+                        modifier = Modifier.animateItem(),
+                    )
                 }
 
                 if (daySessions.isEmpty()) {

@@ -282,6 +282,8 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onDismissUpdate = viewModel::dismissUpdateBanner,
                 showBatteryNotice = !batteryUnrestricted && !settings.batteryNoticeHidden,
                 onRequestBattery = requestBattery,
+                courses = courses,
+                onAddStudyTask = viewModel::addTask,
                 onHideBatteryNotice = viewModel::hideBatteryNotice,
             )
 
