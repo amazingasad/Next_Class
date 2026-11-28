@@ -1,6 +1,7 @@
 package com.example.nextclass.domain.offline
 
 import com.example.nextclass.domain.model.ClassSession
+import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.SessionType
 import kotlin.math.abs
@@ -95,17 +96,24 @@ object TimetableParser {
 
     // ---- Course title list ---------------------------------------------------------
 
-    private val TITLE_LINE = Regex("^([A-Za-z]{2,5}\\s?-?\\d{3,4}[A-Za-z]?)\\s*[-:.)]?\\s+(\\p{L}[\\p{L}0-9 &,'()-]{4,})$")
+    private val TITLE_LINE = Regex(
+        "^(?:\\d{1,3}[.)]?\\s+)?([A-Za-z]{2,5}\\s?-?\\d{3,4}[A-Za-z]?)\\s*[-:.)]?\\s+(\\p{L}[\\p{L}0-9 &,'()-]{4,})$",
+    )
+    private val TRAILING_CREDIT = Regex("\\s+\\d+(?:\\.\\d+)?(?:\\s+(?:Theory|Sessional|Lab|Credit|Credits))?$", RegexOption.IGNORE_CASE)
 
     /**
      * Looks for printed "CSE 3101  Software Engineering" lines. Timetable cells never carry a title on the
      * same line as the code, so a hit with a real word after the code is a course list entry.
      */
+    fun readCourses(pages: List<OfflinePage>): List<Course> =
+        findTitles(pages).map { (code, title) -> Course(code, title) }
+
     private fun findTitles(pages: List<OfflinePage>): Map<String, String> {
         val titles = LinkedHashMap<String, String>()
         for (page in pages) {
             for (line in lineClusters(page.words)) {
-                val text = line.joinToString(" ") { it.text }.replace(Regex("\\s+"), " ").trim()
+                var text = line.joinToString(" ") { it.text }.replace(Regex("\\s+"), " ").trim()
+                text = TRAILING_CREDIT.replace(text, "").trim()
                 val match = TITLE_LINE.matchEntire(text) ?: continue
                 val title = match.groupValues[2].trim()
                 val words = title.split(' ')

@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
+import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.offline.OcrWord
 import com.example.nextclass.domain.offline.OfflineOutcome
 import com.example.nextclass.domain.offline.OfflinePage
@@ -41,10 +42,7 @@ class OfflineRoutineReader(context: Context) {
 
     suspend fun read(uri: Uri): OfflineOutcome = withContext(Dispatchers.Default) {
         try {
-            val mime = appContext.contentResolver.getType(uri).orEmpty()
-            val isPdf = mime == "application/pdf" || uri.toString().lowercase().endsWith(".pdf")
-            val pages = if (isPdf) readPdf(uri) else listOf(readImage(uri))
-            TimetableParser.read(pages)
+            TimetableParser.read(pagesOf(uri))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -52,6 +50,25 @@ class OfflineRoutineReader(context: Context) {
         } catch (e: OutOfMemoryError) {
             OfflineOutcome.NotATimetable("The file is too large to read on this phone.")
         }
+    }
+
+    /** Reads a course list (code and title per row) on this phone. Empty when nothing matched. */
+    suspend fun readCourses(uri: Uri): List<Course> = withContext(Dispatchers.Default) {
+        try {
+            TimetableParser.readCourses(pagesOf(uri))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        } catch (e: OutOfMemoryError) {
+            emptyList()
+        }
+    }
+
+    private suspend fun pagesOf(uri: Uri): List<OfflinePage> {
+        val mime = appContext.contentResolver.getType(uri).orEmpty()
+        val isPdf = mime == "application/pdf" || uri.toString().lowercase().endsWith(".pdf")
+        return if (isPdf) readPdf(uri) else listOf(readImage(uri))
     }
 
     // ---- PDF -----------------------------------------------------------------------------

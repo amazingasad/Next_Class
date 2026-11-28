@@ -833,7 +833,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         courseJob?.cancel()
         _courseScan.value = CourseScanState.Scanning
         courseJob = viewModelScope.launch {
-            repository.scanCourses(uri).fold(
+            val hasKey = keyManager.hasKey()
+            val online = isOnline()
+            val mode = preferences.scanMode
+            val useCloudFirst = mode == 2 || (mode == 0 && hasKey && online)
+            val local: suspend () -> Result<List<Course>> = {
+                val found = offlineReader.readCourses(uri)
+                if (found.isEmpty()) {
+                    Result.failure(
+                        IllegalStateException(
+                            "No course codes with titles were found on this phone." +
+                                if (hasKey) " Connect to the internet to try Gemini." else " Add a free Gemini key in Settings for a harder list.",
+                        ),
+                    )
+                } else {
+                    Result.success(found)
+                }
+            }
+            val outcome = when {
+                mode == 2 && (!hasKey || !online) -> Result.failure(
+                    IllegalStateException("Gemini needs a saved key and internet. Switch the scan engine to Automatic to read offline."),
+                )
+                useCloudFirst -> repository.scanCourses(uri).let { cloud ->
+                    if (cloud.isSuccess || mode == 2) cloud else local().let { if (it.isSuccess) it else cloud }
+                }
+                else -> local()
+            }
+            outcome.fold(
                 onSuccess = { list ->
                     if (list.isEmpty()) {
                         _courseScan.value = CourseScanState.Failed("No courses were found in that file.")

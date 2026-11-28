@@ -106,20 +106,19 @@ fun CoursesScreen(
 
             item(key = "actions") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (hasApiKey) {
-                        PrimaryButton(
-                            text = "Scan course list",
-                            onClick = { picker.launch(arrayOf("image/*", "application/pdf")) },
-                            enabled = scan !is CourseScanState.Scanning,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
+                    PrimaryButton(
+                        text = "Scan course list",
+                        onClick = { picker.launch(arrayOf("image/*", "application/pdf")) },
+                        enabled = scan !is CourseScanState.Scanning,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (!hasApiKey) {
                         Text(
-                            text = "Add a Gemini API key to scan a course list. The guide shows how to get one for free.",
+                            text = "Read on this phone with no internet. A free Gemini key helps with photos this reader cannot handle.",
                             style = NcText.Body,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = NcTheme.extras.muted,
                         )
-                        PrimaryButton(
+                        SecondaryButton(
                             text = "How to get a key",
                             onClick = onOpenSettings,
                             modifier = Modifier.fillMaxWidth(),
