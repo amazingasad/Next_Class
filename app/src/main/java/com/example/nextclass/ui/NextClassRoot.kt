@@ -55,15 +55,21 @@ import com.example.nextclass.ui.screens.WeekScreen
 import com.example.nextclass.worker.AlarmHelper
 import com.example.nextclass.ui.screens.FocusScreen
 import com.example.nextclass.ui.screens.ReviewScreen
+import com.example.nextclass.ui.screens.ToolsScreen
 import com.example.nextclass.worker.NotificationHelper
 
-private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE, PLAN, FOCUS, REVIEW }
+private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE, PLAN, FOCUS, REVIEW, TOOLS }
 
 @Composable
 fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     var guideFrom by rememberSaveable { mutableStateOf(Screen.HOME) }
+    var origin by rememberSaveable { mutableStateOf(Screen.HOME) }
+    val go: (Screen) -> Unit = { target ->
+        origin = screen
+        screen = target
+    }
     val openGuide: () -> Unit = {
         guideFrom = screen
         screen = Screen.GUIDE
@@ -104,9 +110,13 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 planTab = 1
                 screen = Screen.PLAN
             }
-            "review" -> screen = Screen.REVIEW
+            "review" -> {
+                origin = Screen.TOOLS
+                screen = Screen.REVIEW
+            }
             "focus" -> {
                 viewModel.refreshFocus()
+                origin = Screen.TOOLS
                 screen = Screen.FOCUS
             }
         }
@@ -201,19 +211,21 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     BackHandler(enabled = screen == Screen.SETTINGS) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.PLAN) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.ATTENDANCE) { screen = Screen.HOME }
-    BackHandler(enabled = screen == Screen.WEEK) { screen = Screen.HOME }
-    BackHandler(enabled = screen == Screen.FOCUS) { screen = Screen.HOME }
-    BackHandler(enabled = screen == Screen.REVIEW) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.WEEK) { screen = origin }
+    BackHandler(enabled = screen == Screen.FOCUS) { screen = origin }
+    BackHandler(enabled = screen == Screen.REVIEW) { screen = origin }
+    BackHandler(enabled = screen == Screen.TOOLS) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.GUIDE) { screen = guideFrom }
     BackHandler(enabled = screen == Screen.COURSES) {
         viewModel.clearCourseScan()
-        screen = Screen.HOME
+        screen = origin
     }
 
     val dockTab = when (screen) {
         Screen.HOME -> DockTab.TODAY
         Screen.PLAN -> DockTab.PLAN
         Screen.ATTENDANCE -> DockTab.ATTENDANCE
+        Screen.TOOLS -> DockTab.TOOLS
         Screen.SETTINGS -> DockTab.SETTINGS
         else -> null
     }
@@ -222,6 +234,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
             DockTab.TODAY -> Screen.HOME
             DockTab.PLAN -> Screen.PLAN
             DockTab.ATTENDANCE -> Screen.ATTENDANCE
+            DockTab.TOOLS -> Screen.TOOLS
             DockTab.SETTINGS -> Screen.SETTINGS
         }
     }
@@ -235,10 +248,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
-            val topLevel = setOf(Screen.HOME, Screen.PLAN, Screen.ATTENDANCE, Screen.SETTINGS)
+            val topLevel = setOf(Screen.HOME, Screen.PLAN, Screen.ATTENDANCE, Screen.TOOLS, Screen.SETTINGS)
             if (initialState in topLevel && targetState in topLevel) {
                 // Siblings in the dock: a short horizontal drift with a fade-through.
-                val order = listOf(Screen.HOME, Screen.PLAN, Screen.ATTENDANCE, Screen.SETTINGS)
+                val order = listOf(Screen.HOME, Screen.PLAN, Screen.ATTENDANCE, Screen.TOOLS, Screen.SETTINGS)
                 val direction = if (order.indexOf(targetState) > order.indexOf(initialState)) 1 else -1
                 (
                     slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> direction * w / 10 } +
@@ -273,8 +286,8 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 showNotificationNotice = permissionNeeded && !notificationsGranted,
                 onSelectDay = viewModel::selectDay,
                 onImport = { screen = Screen.IMPORT },
-                onCourses = { screen = Screen.COURSES },
-                onWeek = { screen = Screen.WEEK },
+                onCourses = { go(Screen.COURSES) },
+                onWeek = { go(Screen.WEEK) },
                 semesters = semesters,
                 onSwitchSemester = viewModel::switchSemester,
                 onAddSemester = viewModel::addSemester,
@@ -299,10 +312,9 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onAddStudyTask = viewModel::addTask,
                 breaks = breaks,
                 studyLog = studyLog,
-                onAddBreak = viewModel::addBreak,
-                onDeleteBreak = viewModel::deleteBreak,
-                onFocus = { screen = Screen.FOCUS },
-                onReview = { screen = Screen.REVIEW },
+                focus = focus,
+                tasks = planTasks,
+                onFocus = { go(Screen.FOCUS) },
                 onHideBatteryNotice = viewModel::hideBatteryNotice,
             )
 
@@ -358,7 +370,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 hasApiKey = settings.hasKey,
                 onBack = {
                     viewModel.clearCourseScan()
-                    screen = Screen.HOME
+                    screen = origin
                 },
                 onScan = viewModel::scanCourses,
                 onAdd = viewModel::addCourse,
@@ -370,7 +382,7 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 sessions = sessions,
                 overrides = overrides,
                 now = now,
-                onBack = { screen = Screen.HOME },
+                onBack = { screen = origin },
                 onOpenDay = { day ->
                     viewModel.selectDay(day)
                     screen = Screen.HOME
@@ -405,12 +417,28 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onClearCourse = viewModel::clearAttendanceFor,
             )
 
+            Screen.TOOLS -> ToolsScreen(
+                focus = focus,
+                studyLog = studyLog,
+                review = reviewData,
+                breaks = breaks,
+                courseCount = courses.size,
+                today = now.toLocalDate(),
+                onFocus = { go(Screen.FOCUS) },
+                onReview = { go(Screen.REVIEW) },
+                onWeek = { go(Screen.WEEK) },
+                onCourses = { go(Screen.COURSES) },
+                onImport = { go(Screen.IMPORT) },
+                onAddBreak = viewModel::addBreak,
+                onDeleteBreak = viewModel::deleteBreak,
+            )
+
             Screen.FOCUS -> FocusScreen(
                 courses = courses,
                 focus = focus,
                 studyLog = studyLog,
                 today = now.toLocalDate(),
-                onBack = { screen = Screen.HOME },
+                onBack = { screen = origin },
                 onStart = viewModel::startFocus,
                 onPause = viewModel::pauseFocus,
                 onResume = viewModel::resumeFocus,
@@ -421,9 +449,9 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
             Screen.REVIEW -> ReviewScreen(
                 data = reviewData,
                 today = now.toLocalDate(),
-                onBack = { screen = Screen.HOME },
+                onBack = { screen = origin },
                 onOpenAttendance = { screen = Screen.ATTENDANCE },
-                onOpenFocus = { screen = Screen.FOCUS },
+                onOpenFocus = { origin = Screen.REVIEW; screen = Screen.FOCUS },
             )
 
             Screen.GUIDE -> ApiKeyGuideScreen(

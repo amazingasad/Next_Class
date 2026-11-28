@@ -35,10 +35,22 @@ fun StudySuggestionCard(
     dateKey: String,
     onAdd: (StudySlot) -> Unit,
     onStartTimer: () -> Unit,
+    plannedTitles: List<String>,
     modifier: Modifier = Modifier,
 ) {
     if (plan.slots.isEmpty()) return
     var gone by remember(dateKey) { mutableStateOf(setOf<String>()) }
+    var clicked by remember(dateKey) { mutableStateOf(setOf<String>()) }
+    // A block that already became a task (earlier, or from another session) is not suggested again.
+    LaunchedEffect(plannedTitles, plan.slots) {
+        val planned = plan.slots
+            .filter { slot ->
+                val key = slotKey(slot)
+                key !in clicked && plannedTitles.any { it.startsWith("Study " + slot.courseCode) }
+            }
+            .map { slotKey(it) }
+        if (planned.isNotEmpty()) gone = gone + planned
+    }
     val remaining = plan.slots.filter { slotKey(it) !in gone }
 
     AnimatedVisibility(
@@ -73,7 +85,10 @@ fun StudySuggestionCard(
                     StudyRow(
                         slot = slot,
                         visible = key !in gone,
-                        onAdd = { onAdd(slot) },
+                        onAdd = {
+                            clicked = clicked + key
+                            onAdd(slot)
+                        },
                         onDone = { gone = gone + key },
                     )
                 }

@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.FactCheck
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ enum class DockTab(val label: String, val icon: ImageVector) {
     TODAY("Today", Icons.Rounded.Today),
     PLAN("Plan", Icons.Rounded.Checklist),
     ATTENDANCE("Attendance", Icons.Rounded.FactCheck),
+    TOOLS("Tools", Icons.Rounded.GridView),
     SETTINGS("Settings", Icons.Rounded.Settings),
 }
 
@@ -111,7 +113,7 @@ private fun DockItem(tab: DockTab, selected: Boolean, onClick: () -> Unit) {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             }
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

@@ -62,6 +62,8 @@ import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.BreakPeriod
 import com.example.nextclass.domain.model.Breaks
 import com.example.nextclass.domain.model.StudyEntry
+import com.example.nextclass.domain.model.FocusSession
+import com.example.nextclass.domain.model.PlannerTask
 import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.StudyPlanner
@@ -129,17 +131,15 @@ fun HomeScreen(
     onAddStudyTask: (LocalDate, String) -> Unit,
     breaks: List<BreakPeriod>,
     studyLog: List<StudyEntry>,
-    onAddBreak: (String, LocalDate, LocalDate) -> Unit,
-    onDeleteBreak: (Long) -> Unit,
+    focus: FocusSession?,
+    tasks: List<PlannerTask>,
     onFocus: () -> Unit,
-    onReview: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var editing by remember { mutableStateOf<ClassSession?>(null) }
     var creating by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf<ClassSession?>(null) }
     var showSemesters by remember { mutableStateOf(false) }
-    var showBreaks by remember { mutableStateOf(false) }
 
     val today = now.dayOfWeek.value
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -156,9 +156,6 @@ fun HomeScreen(
             onImport = onImport,
             onCourses = onCourses,
             onWeek = onWeek,
-            onBreaks = { showBreaks = true },
-            onFocus = onFocus,
-            onReview = onReview,
         )
 
         if (sessions == null) return@Column
@@ -375,6 +372,12 @@ fun HomeScreen(
                     }
                 }
 
+                if (focus != null) {
+                    item(key = "focus-banner") {
+                        FocusBanner(focus = focus, onClick = onFocus, modifier = Modifier.animateItem())
+                    }
+                }
+
                 item(key = "study") {
                     val isToday = selectedDate == now.toLocalDate()
                     val nowMin = if (isToday) now.hour * 60 + now.minute else null
@@ -389,6 +392,7 @@ fun HomeScreen(
                         dateKey = selectedDate.toString(),
                         onAdd = { slot -> onAddStudyTask(selectedDate, slot.taskTitle) },
                         onStartTimer = onFocus,
+                        plannedTitles = tasks.filter { it.date == selectedDate.toString() }.map { it.title },
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -429,16 +433,6 @@ fun HomeScreen(
             onRename = onRenameSemester,
             onDelete = onDeleteSemester,
             onDismiss = { showSemesters = false },
-        )
-    }
-
-    if (showBreaks) {
-        BreaksSheet(
-            breaks = breaks,
-            today = now.toLocalDate(),
-            onAdd = onAddBreak,
-            onDelete = onDeleteBreak,
-            onDismiss = { showBreaks = false },
         )
     }
 
@@ -601,9 +595,6 @@ private fun TopBar(
     onImport: () -> Unit,
     onCourses: () -> Unit,
     onWeek: () -> Unit,
-    onBreaks: () -> Unit,
-    onFocus: () -> Unit,
-    onReview: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val chipShape = RoundedCornerShape(20.dp)
@@ -640,61 +631,6 @@ private fun TopBar(
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = stringResource(R.string.cd_more),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Import routine", style = NcText.Body) },
-                        leadingIcon = { Icon(Icons.Rounded.UploadFile, contentDescription = null) },
-                        onClick = {
-                            menuOpen = false
-                            onImport()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Study timer", style = NcText.Body) },
-                        leadingIcon = { Icon(Icons.Rounded.Timer, contentDescription = null) },
-                        onClick = {
-                            menuOpen = false
-                            onFocus()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Weekly review", style = NcText.Body) },
-                        leadingIcon = { Icon(Icons.Rounded.Insights, contentDescription = null) },
-                        onClick = {
-                            menuOpen = false
-                            onReview()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Breaks", style = NcText.Body) },
-                        leadingIcon = { Icon(Icons.Rounded.EventBusy, contentDescription = null) },
-                        onClick = {
-                            menuOpen = false
-                            onBreaks()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Courses", style = NcText.Body) },
-                        leadingIcon = { Icon(Icons.Rounded.Book, contentDescription = null) },
-                        onClick = {
-                            menuOpen = false
-                            onCourses()
-                        },
-                    )
-                }
-            }
         }
         Spacer(Modifier.height(10.dp))
         Text(
@@ -703,5 +639,37 @@ private fun TopBar(
             color = MaterialTheme.colorScheme.onSurface,
         )
         MicroLabel(text = now.format(LONG_DATE))
+    }
+}
+
+/** Shown on Today while a study timer is running or paused. */
+@Composable
+private fun FocusBanner(focus: FocusSession, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(16.dp)
+    val left = (focus.leftSec(System.currentTimeMillis()) + 59) / 60
+    Row(
+        modifier = modifier
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, NcTheme.extras.live, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusDot(NcTheme.extras.live)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            MicroLabel(
+                text = if (focus.running) "Studying" else "Paused",
+                color = NcTheme.extras.liveText,
+            )
+            Text(
+                text = focus.courseCode + ", " + TimeFormat.duration(left) + " left",
+                style = NcText.Title,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        MicroLabel(text = "Open", color = MaterialTheme.colorScheme.onSurface)
     }
 }
