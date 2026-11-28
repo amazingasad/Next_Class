@@ -230,4 +230,21 @@ interface RoutineDao {
         }
         return true
     }
+
+    // ---- Breaks ----
+
+    @Query("SELECT * FROM breaks ORDER BY startDate ASC")
+    fun observeBreaks(): Flow<List<BreakEntity>>
+
+    @Query("SELECT * FROM breaks ORDER BY startDate ASC")
+    suspend fun getBreaks(): List<BreakEntity>
+
+    @Insert
+    suspend fun insertBreak(item: BreakEntity): Long
+
+    @Query("DELETE FROM breaks WHERE id = :id")
+    suspend fun deleteBreak(id: Long)
+
+    @Query("DELETE FROM breaks WHERE endDate < :before")
+    suspend fun deleteBreaksBefore(before: String)
 }

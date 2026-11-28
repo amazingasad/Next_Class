@@ -14,6 +14,10 @@ data class StudySlot(
     val range: String
         get() = TimeFormat.clock12(hhmm(startMinutes)) + " — " + TimeFormat.clock12(hhmm(endMinutes))
 
+    fun startText(): String = TimeFormat.clock12(hhmm(startMinutes))
+
+    fun endText(): String = TimeFormat.clock12(hhmm(endMinutes))
+
     /** Text for a to-do item created from this suggestion. */
     val taskTitle: String
         get() = "Study $courseCode" + (if (courseTitle.isNotBlank()) " ($courseTitle)" else "") +
@@ -58,11 +62,14 @@ object StudyPlanner {
         overrides: List<ClassOverride>,
         courses: List<Course>,
         nowMinutes: Int?,
+        breaks: List<BreakPeriod> = emptyList(),
+        studyMinutesByCourse: Map<String, Int> = emptyMap(),
     ): StudyPlan {
         if (sessions.isEmpty()) return StudyPlan(offDay = false, freeMinutes = 0, slots = emptyList())
 
         val dateText = date.toString()
-        val dayClasses = sessions
+        val onBreak = Breaks.on(date, breaks) != null
+        val dayClasses = if (onBreak) emptyList() else sessions
             .filter { it.dayOfWeek == date.dayOfWeek.value }
             .filter { s -> overrides.none { it.sessionId == s.id && it.date == dateText && it.cancelled } }
             .sortedBy { it.startMinutes }
@@ -88,6 +95,7 @@ object StudyPlanner {
             for ((key, info) in pool) {
                 if (key in used) continue
                 var score = 0.1 * (weekly[key] ?: 0) + ((key.hashCode() + date.toEpochDay()).mod(7)) * 0.05
+                score += maxOf(0.0, 1.5 - (studyMinutesByCourse[key] ?: 0) / 120.0)
                 var reason = if (offDay) "Off day, extra time to get ahead" else "No class soon, a good time to get ahead"
                 val before = dayClasses.any { CourseCodes.key(it.courseCode) == key && it.endMinutes <= block.start }
                 val later = dayClasses

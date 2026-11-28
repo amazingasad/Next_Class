@@ -44,6 +44,7 @@ import com.example.nextclass.data.local.AppPreferences
 import com.example.nextclass.data.local.toDomain
 import com.example.nextclass.domain.model.Note
 import com.example.nextclass.domain.model.PlannerTask
+import com.example.nextclass.domain.model.StudyPlanner
 import java.time.LocalDate
 
 /**
@@ -58,6 +59,7 @@ class NextClassPlannerWidget : GlanceAppWidget() {
         val tasks: List<PlannerTask>,
         val themeMode: Int,
         val dynamic: Boolean,
+        val suggestion: String?,
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -76,12 +78,30 @@ class NextClassPlannerWidget : GlanceAppWidget() {
         val note = notes.firstOrNull { it.pinned } ?: notes.firstOrNull()
         val today = LocalDate.now().toString()
         val tasks = dao.tasksOn(today).map { it.toDomain() }
+        val routine = AppDatabase.getInstance(context).routineDao()
+        val nowTime = java.time.LocalDateTime.now()
+        val studyByCourse = dao.studyBetween(nowTime.toLocalDate().minusDays(7).toString(), today)
+            .groupBy { it.courseKey }
+            .mapValues { (_, list) -> list.sumOf { it.minutes } }
+        val plan = StudyPlanner.plan(
+            date = nowTime.toLocalDate(),
+            sessions = routine.getAll().map { it.toDomain() },
+            overrides = routine.getOverrides(today).map { it.toDomain() },
+            courses = routine.getCourses().map { it.toDomain() },
+            nowMinutes = nowTime.hour * 60 + nowTime.minute,
+            breaks = routine.getBreaks().map { it.toDomain() },
+            studyMinutesByCourse = studyByCourse,
+        )
+        val slot = plan.slots.firstOrNull { s ->
+            tasks.none { it.title.startsWith("Study ") && it.title.contains(s.courseCode) }
+        }
         return Model(
             page = prefs.plannerPage.coerceIn(0, 1),
             note = note,
             tasks = tasks,
             themeMode = prefs.widgetTheme,
             dynamic = prefs.dynamicColor,
+            suggestion = slot?.let { it.courseCode + ", " + it.startText() + " to " + it.endText() },
         )
     }
 
@@ -150,6 +170,15 @@ class NextClassPlannerWidget : GlanceAppWidget() {
                 }
 
                 Spacer(modifier = GlanceModifier.height(4.dp))
+
+                if (model.suggestion != null) {
+                    Text(
+                        text = "STUDY  " + model.suggestion,
+                        maxLines = 1,
+                        modifier = GlanceModifier.padding(start = 4.dp, bottom = 4.dp),
+                        style = TextStyle(color = p.vermilionText, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                    )
+                }
 
                 if (onNotes) NotePage(model.note, p) else TasksPage(model.tasks, p)
             }

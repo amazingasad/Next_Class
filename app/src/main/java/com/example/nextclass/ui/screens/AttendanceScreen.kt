@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nextclass.R
 import com.example.nextclass.domain.model.AttendanceMark
+import com.example.nextclass.domain.model.BreakPeriod
 import com.example.nextclass.domain.model.AttendanceMath
 import com.example.nextclass.domain.model.ClassOverride
 import com.example.nextclass.domain.model.ClassSession
@@ -77,13 +78,14 @@ fun AttendanceScreen(
     sessions: List<ClassSession>,
     overrides: List<ClassOverride>,
     marks: List<AttendanceMark>,
+    breaks: List<BreakPeriod>,
     now: LocalDateTime,
     onBack: () -> Unit,
     onMark: (ClassSession, LocalDate, Boolean?) -> Unit,
     onClearCourse: (String) -> Unit,
 ) {
-    val occurrences = remember(sessions, overrides, now.toLocalDate(), now.hour, now.minute) {
-        AttendanceMath.occurrences(sessions, overrides, now, LOOKBACK_DAYS).groupBy { it.courseKey }
+    val occurrences = remember(sessions, overrides, breaks, now.toLocalDate(), now.hour, now.minute) {
+        AttendanceMath.occurrences(sessions, overrides, now, LOOKBACK_DAYS, breaks).groupBy { it.courseKey }
     }
     val markIndex = remember(marks) {
         marks.associate { "${it.courseKey}|${it.date}|${it.startTime}" to it.present }

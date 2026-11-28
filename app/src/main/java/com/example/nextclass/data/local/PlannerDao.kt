@@ -18,6 +18,9 @@ interface PlannerDao {
     @Query("SELECT * FROM tasks WHERE date = :date ORDER BY done ASC, id ASC")
     suspend fun tasksOn(date: String): List<TaskEntity>
 
+    @Query("SELECT * FROM tasks WHERE date >= :from AND date <= :to")
+    suspend fun tasksBetween(from: String, to: String): List<TaskEntity>
+
     @Insert
     suspend fun insertTask(task: TaskEntity): Long
 
@@ -80,4 +83,15 @@ interface PlannerDao {
         clearNotes()
         insertNotes(notes)
     }
+
+    // ---- Study log ----
+
+    @Insert
+    suspend fun insertStudy(entry: StudyLogEntity): Long
+
+    @Query("SELECT * FROM study_log WHERE date >= :from ORDER BY id DESC")
+    fun observeStudySince(from: String): Flow<List<StudyLogEntity>>
+
+    @Query("SELECT * FROM study_log WHERE date >= :from AND date <= :to")
+    suspend fun studyBetween(from: String, to: String): List<StudyLogEntity>
 }

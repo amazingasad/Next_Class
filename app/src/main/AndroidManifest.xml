@@ -64,6 +64,14 @@
             android:exported="false" />
 
         <receiver
+            android:name=".worker.FocusDoneReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".worker.WeeklyReviewReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".worker.WidgetTransitionReceiver"
             android:exported="false" />
 

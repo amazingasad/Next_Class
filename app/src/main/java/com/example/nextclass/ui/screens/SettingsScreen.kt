@@ -74,6 +74,8 @@ fun SettingsScreen(
     onDynamicColor: (Boolean) -> Unit,
     onPlanEnabled: (Boolean) -> Unit,
     onPlanMinutes: (Int) -> Unit,
+    onReviewEnabled: (Boolean) -> Unit,
+    onReviewDay: (Int) -> Unit,
     onShare: () -> Unit,
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -297,6 +299,59 @@ fun SettingsScreen(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onPlanMinutes(minutes)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
+            // ---- Weekly review ----
+            MicroLabel("Weekly review")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Summary of your week",
+                        style = NcText.Title,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Classes attended, tasks done and study time, once a week at 6:00 PM.",
+                        style = NcText.Body,
+                        color = NcTheme.extras.muted,
+                    )
+                }
+                Switch(
+                    checked = state.reviewEnabled,
+                    onCheckedChange = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onReviewEnabled(it)
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.surface,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSurface,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSurface,
+                        uncheckedThumbColor = NcTheme.extras.muted,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        uncheckedBorderColor = NcTheme.extras.hairline,
+                    ),
+                )
+            }
+            MicroLabel("Review day")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                AppPreferences.REVIEW_DAY_OPTIONS.forEach { day ->
+                    SelectPill(
+                        label = com.example.nextclass.domain.model.DayNames.full(day).take(3),
+                        selected = state.reviewDay == day,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onReviewDay(day)
                         },
                         modifier = Modifier.weight(1f),
                     )

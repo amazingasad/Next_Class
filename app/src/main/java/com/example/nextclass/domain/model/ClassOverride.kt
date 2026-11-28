@@ -26,9 +26,11 @@ object RoutineOverrides {
         sessions: List<ClassSession>,
         overrides: List<ClassOverride>,
         today: LocalDate,
+        breaks: List<BreakPeriod> = emptyList(),
     ): List<ClassSession> {
-        if (overrides.isEmpty()) return sessions
+        if (overrides.isEmpty() && breaks.isEmpty()) return sessions
         return sessions.mapNotNull { session ->
+            if (Breaks.on(nextDate(session.dayOfWeek, today), breaks) != null) return@mapNotNull null
             val override = find(overrides, session, today)
             when {
                 override == null -> session

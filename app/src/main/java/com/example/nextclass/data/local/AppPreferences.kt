@@ -48,6 +48,68 @@ class AppPreferences(context: Context) {
             prefs.edit().putInt(KEY_PLANNER_PAGE, value).apply()
         }
 
+    var reviewEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REVIEW_ENABLED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_REVIEW_ENABLED, value).apply()
+        }
+
+    /** Day of the week, 1 = Monday, when the weekly review notification arrives. Default Friday. */
+    var reviewDay: Int
+        get() = prefs.getInt(KEY_REVIEW_DAY, 5)
+        set(value) {
+            prefs.edit().putInt(KEY_REVIEW_DAY, value).apply()
+        }
+
+    /** Minutes after midnight for the weekly review. Default 6:00 PM. */
+    var reviewMinutes: Int
+        get() = prefs.getInt(KEY_REVIEW_MINUTES, 18 * 60)
+        set(value) {
+            prefs.edit().putInt(KEY_REVIEW_MINUTES, value).apply()
+        }
+
+    var focusCourseKey: String
+        get() = prefs.getString(KEY_FOCUS_KEY, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_FOCUS_KEY, value).apply()
+        }
+
+    var focusCourseCode: String
+        get() = prefs.getString(KEY_FOCUS_CODE, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_FOCUS_CODE, value).apply()
+        }
+
+    var focusTotalSec: Int
+        get() = prefs.getInt(KEY_FOCUS_TOTAL, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_FOCUS_TOTAL, value).apply()
+        }
+
+    var focusEndAt: Long
+        get() = prefs.getLong(KEY_FOCUS_END, 0L)
+        set(value) {
+            prefs.edit().putLong(KEY_FOCUS_END, value).apply()
+        }
+
+    /** Seconds left while paused, or -1 while the timer is running. */
+    var focusPausedLeft: Int
+        get() = prefs.getInt(KEY_FOCUS_PAUSED, -1)
+        set(value) {
+            prefs.edit().putInt(KEY_FOCUS_PAUSED, value).apply()
+        }
+
+    /** Writes every focus field in one commit so a reader never sees half a session. */
+    fun writeFocus(key: String, code: String, total: Int, endAt: Long, pausedLeft: Int) {
+        prefs.edit()
+            .putString(KEY_FOCUS_KEY, key)
+            .putString(KEY_FOCUS_CODE, code)
+            .putInt(KEY_FOCUS_TOTAL, total)
+            .putLong(KEY_FOCUS_END, endAt)
+            .putInt(KEY_FOCUS_PAUSED, pausedLeft)
+            .commit()
+    }
+
     var dynamicColor: Boolean
         get() = prefs.getBoolean(KEY_DYNAMIC, false)
         set(value) {
@@ -72,6 +134,15 @@ class AppPreferences(context: Context) {
         val PLAN_OPTIONS = listOf(19 * 60, 20 * 60, 21 * 60, 22 * 60)
         val LEAD_OPTIONS = listOf(15, 30, 45)
 
+        private const val KEY_REVIEW_ENABLED = "review_enabled"
+        private const val KEY_REVIEW_DAY = "review_day"
+        private const val KEY_REVIEW_MINUTES = "review_minutes"
+        private const val KEY_FOCUS_KEY = "focus_key"
+        private const val KEY_FOCUS_CODE = "focus_code"
+        private const val KEY_FOCUS_TOTAL = "focus_total"
+        private const val KEY_FOCUS_END = "focus_end"
+        private const val KEY_FOCUS_PAUSED = "focus_paused"
+        val REVIEW_DAY_OPTIONS = listOf(4, 5, 6, 7)
         private const val FILE = "nextclass_prefs"
         private const val KEY_PLAN_ENABLED = "plan_reminder_enabled"
         private const val KEY_PLAN_MINUTES = "plan_minutes"

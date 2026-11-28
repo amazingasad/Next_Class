@@ -15,6 +15,10 @@ object NotificationHelper {
     const val NOTIFICATION_ID_FIRST_CLASS = 2001
     const val CHANNEL_PLAN = "plan_tomorrow"
     const val NOTIFICATION_ID_PLAN = 2002
+    const val CHANNEL_FOCUS = "focus_done"
+    const val NOTIFICATION_ID_FOCUS = 2003
+    const val CHANNEL_REVIEW = "weekly_review"
+    const val NOTIFICATION_ID_REVIEW = 2004
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -35,6 +39,20 @@ object NotificationHelper {
             description = context.getString(R.string.channel_plan_description)
         }
         manager.createNotificationChannel(plan)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_FOCUS,
+                context.getString(R.string.channel_focus_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply { description = context.getString(R.string.channel_focus_description) },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_REVIEW,
+                context.getString(R.string.channel_review_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = context.getString(R.string.channel_review_description) },
+        )
     }
 
     fun hasPermission(context: Context): Boolean =

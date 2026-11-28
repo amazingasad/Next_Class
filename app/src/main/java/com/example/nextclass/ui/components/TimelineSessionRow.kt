@@ -145,15 +145,23 @@ fun TimelineSessionRow(
                 .weight(1f)
                 .padding(start = 8.dp, top = 14.dp, bottom = 14.dp),
         ) {
-            Text(
-                text = session.courseCode,
-                style = NcText.Title.copy(
-                    textDecoration = if (cancelled) TextDecoration.LineThrough else null,
-                ),
-                color = if (cancelled) extras.muted else onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CourseMark(
+                    key = com.example.nextclass.domain.model.CourseCodes.key(session.courseCode),
+                    markSize = 12.dp,
+                    color = if (cancelled) extras.muted else onSurface,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = session.courseCode,
+                    style = NcText.Title.copy(
+                        textDecoration = if (cancelled) TextDecoration.LineThrough else null,
+                    ),
+                    color = if (cancelled) extras.muted else onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (session.courseTitle.isNotBlank()) {
                 Text(
                     text = session.courseTitle,

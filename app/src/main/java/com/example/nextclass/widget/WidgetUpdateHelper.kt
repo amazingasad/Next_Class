@@ -22,9 +22,11 @@ object WidgetUpdateHelper {
         dao.deleteOverridesBefore(java.time.LocalDate.now().toString())
         AppDatabase.getInstance(appContext).plannerDao()
             .deleteTasksBefore(java.time.LocalDate.now().minusDays(14).toString())
+        dao.deleteBreaksBefore(java.time.LocalDate.now().minusDays(90).toString())
         updateWidgets(appContext)
         scheduleNextTransition(appContext)
         PlanReminderScheduler.schedule(appContext)
+        com.example.nextclass.worker.WeeklyReviewScheduler.schedule(appContext)
         ScheduleDailyFirstClassAlarmUseCase(appContext, dao, AppPreferences(appContext)).invoke()
     }
 

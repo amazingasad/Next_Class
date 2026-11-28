@@ -77,6 +77,7 @@ object AttendanceMath {
         overrides: List<ClassOverride>,
         now: LocalDateTime,
         days: Int,
+        breaks: List<BreakPeriod> = emptyList(),
     ): List<Occurrence> {
         val today = now.toLocalDate()
         val minutesNow = now.hour * 60 + now.minute
@@ -84,6 +85,7 @@ object AttendanceMath {
         for (offset in 0 until days) {
             val date = today.minusDays(offset.toLong())
             val dateText = date.toString()
+            if (Breaks.on(date, breaks) != null) continue
             sessions
                 .filter { it.dayOfWeek == date.dayOfWeek.value }
                 .sortedBy { it.startTime }

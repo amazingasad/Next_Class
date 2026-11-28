@@ -23,7 +23,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarViewWeek
+import androidx.compose.material.icons.rounded.EventBusy
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.UploadFile
@@ -56,9 +59,13 @@ import com.example.nextclass.R
 import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.ClassOverride
+import com.example.nextclass.domain.model.BreakPeriod
+import com.example.nextclass.domain.model.Breaks
+import com.example.nextclass.domain.model.StudyEntry
 import com.example.nextclass.domain.model.Course
 import com.example.nextclass.domain.model.CourseCodes
 import com.example.nextclass.domain.model.StudyPlanner
+import com.example.nextclass.ui.components.BreaksSheet
 import com.example.nextclass.ui.components.StudySuggestionCard
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.DayNames
@@ -120,12 +127,19 @@ fun HomeScreen(
     onHideBatteryNotice: () -> Unit,
     courses: List<Course>,
     onAddStudyTask: (LocalDate, String) -> Unit,
+    breaks: List<BreakPeriod>,
+    studyLog: List<StudyEntry>,
+    onAddBreak: (String, LocalDate, LocalDate) -> Unit,
+    onDeleteBreak: (Long) -> Unit,
+    onFocus: () -> Unit,
+    onReview: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var editing by remember { mutableStateOf<ClassSession?>(null) }
     var creating by remember { mutableStateOf(false) }
     var acting by remember { mutableStateOf<ClassSession?>(null) }
     var showSemesters by remember { mutableStateOf(false) }
+    var showBreaks by remember { mutableStateOf(false) }
 
     val today = now.dayOfWeek.value
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -142,6 +156,9 @@ fun HomeScreen(
             onImport = onImport,
             onCourses = onCourses,
             onWeek = onWeek,
+            onBreaks = { showBreaks = true },
+            onFocus = onFocus,
+            onReview = onReview,
         )
 
         if (sessions == null) return@Column
@@ -150,7 +167,8 @@ fun HomeScreen(
             .sortedBy { it.startTime }
         val liveId = (hero as? NextClassState.Ongoing)?.session?.id
         val selectedDate = RoutineOverrides.nextDate(selectedDay, now.toLocalDate())
-        val entries = buildDayEntries(daySessions, overrides, selectedDate)
+        val breakOnDay = Breaks.on(selectedDate, breaks)
+        val entries = if (breakOnDay != null) emptyList() else buildDayEntries(daySessions, overrides, selectedDate)
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -332,16 +350,45 @@ fun HomeScreen(
                     }
                 }
 
+                if (breakOnDay != null) {
+                    item(key = "break-banner") {
+                        Column(
+                            Modifier
+                                .animateItem()
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                        ) {
+                            MicroLabel(text = "Break", color = NcTheme.extras.liveText)
+                            Text(
+                                text = breakOnDay.name,
+                                style = NcText.Title,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            Text(
+                                text = "No classes. " + Breaks.describe(breakOnDay, now.toLocalDate()) + ".",
+                                style = NcText.Body,
+                                color = NcTheme.extras.muted,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
+                }
+
                 item(key = "study") {
                     val isToday = selectedDate == now.toLocalDate()
                     val nowMin = if (isToday) now.hour * 60 + now.minute else null
-                    val plan = remember(sessions, overrides, courses, selectedDate, nowMin) {
-                        StudyPlanner.plan(selectedDate, sessions, overrides, courses, nowMin)
+                    val studyByCourse = remember(studyLog) {
+                        studyLog.groupBy { it.courseKey }.mapValues { (_, list) -> list.sumOf { it.minutes } }
+                    }
+                    val plan = remember(sessions, overrides, courses, selectedDate, nowMin, breaks, studyByCourse) {
+                        StudyPlanner.plan(selectedDate, sessions, overrides, courses, nowMin, breaks, studyByCourse)
                     }
                     StudySuggestionCard(
                         plan = plan,
                         dateKey = selectedDate.toString(),
                         onAdd = { slot -> onAddStudyTask(selectedDate, slot.taskTitle) },
+                        onStartTimer = onFocus,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -382,6 +429,16 @@ fun HomeScreen(
             onRename = onRenameSemester,
             onDelete = onDeleteSemester,
             onDismiss = { showSemesters = false },
+        )
+    }
+
+    if (showBreaks) {
+        BreaksSheet(
+            breaks = breaks,
+            today = now.toLocalDate(),
+            onAdd = onAddBreak,
+            onDelete = onDeleteBreak,
+            onDismiss = { showBreaks = false },
         )
     }
 
@@ -544,6 +601,9 @@ private fun TopBar(
     onImport: () -> Unit,
     onCourses: () -> Unit,
     onWeek: () -> Unit,
+    onBreaks: () -> Unit,
+    onFocus: () -> Unit,
+    onReview: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val chipShape = RoundedCornerShape(20.dp)
@@ -599,6 +659,30 @@ private fun TopBar(
                         onClick = {
                             menuOpen = false
                             onImport()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Study timer", style = NcText.Body) },
+                        leadingIcon = { Icon(Icons.Rounded.Timer, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onFocus()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Weekly review", style = NcText.Body) },
+                        leadingIcon = { Icon(Icons.Rounded.Insights, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onReview()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Breaks", style = NcText.Body) },
+                        leadingIcon = { Icon(Icons.Rounded.EventBusy, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onBreaks()
                         },
                     )
                     DropdownMenuItem(

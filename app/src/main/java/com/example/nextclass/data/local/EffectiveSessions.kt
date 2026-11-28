@@ -8,5 +8,6 @@ import java.time.LocalDate
 suspend fun RoutineDao.effectiveSessions(today: LocalDate = LocalDate.now()): List<ClassSession> {
     val sessions = getAll().map { it.toDomain() }
     val overrides = getOverrides(today.minusDays(1).toString()).map { it.toDomain() }
-    return RoutineOverrides.effective(sessions, overrides, today)
+    val breaks = getBreaks().map { it.toDomain() }
+    return RoutineOverrides.effective(sessions, overrides, today, breaks)
 }

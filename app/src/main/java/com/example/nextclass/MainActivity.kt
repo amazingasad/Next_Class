@@ -32,6 +32,8 @@ class MainActivity : ComponentActivity() {
         const val OPEN_PLAN = "plan"
         const val OPEN_NOTES = "notes"
         const val OPEN_TASKS = "tasks"
+        const val OPEN_REVIEW = "review"
+        const val OPEN_FOCUS = "focus"
     }
 
     private val viewModel: MainViewModel by viewModels()

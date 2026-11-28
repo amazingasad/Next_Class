@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.nextclass.data.local.ApiKeyManager
 import com.example.nextclass.data.local.AppDatabase
 import com.example.nextclass.data.local.AppPreferences
+import com.example.nextclass.data.local.BreakEntity
 import com.example.nextclass.data.local.NoteEntity
 import com.example.nextclass.data.local.TaskEntity
 import com.example.nextclass.data.local.RoutineCodec
@@ -19,7 +20,14 @@ import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.domain.model.AttendanceMark
 import com.example.nextclass.domain.model.AttendanceMath
 import com.example.nextclass.domain.model.CourseAttendance
+import com.example.nextclass.domain.model.BreakPeriod
+import com.example.nextclass.domain.model.FocusSession
 import com.example.nextclass.domain.model.Note
+import com.example.nextclass.domain.model.StudyEntry
+import com.example.nextclass.domain.model.TimeFormat
+import com.example.nextclass.domain.model.WeeklyReview
+import com.example.nextclass.domain.model.WeeklyReviewData
+import com.example.nextclass.worker.FocusManager
 import com.example.nextclass.domain.model.PlannerTask
 import com.example.nextclass.domain.model.Semester
 import com.example.nextclass.domain.model.ClassOverride
@@ -81,6 +89,22 @@ data class SettingsUiState(
     val dynamicColor: Boolean = false,
     val planEnabled: Boolean = true,
     val planMinutes: Int = AppPreferences.DEFAULT_PLAN_MINUTES,
+    val reviewEnabled: Boolean = true,
+    val reviewDay: Int = 5,
+)
+
+private data class ReviewInputs(
+    val sessions: List<ClassSession>,
+    val overrides: List<ClassOverride>,
+    val breaks: List<BreakPeriod>,
+    val courses: List<Course>,
+)
+
+private data class ReviewLive(
+    val marks: List<AttendanceMark>,
+    val tasks: List<PlannerTask>,
+    val study: List<StudyEntry>,
+    val today: LocalDate,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -144,11 +168,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             AttendanceMath.summarize(list.orEmpty(), courseList, marks)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val hero: StateFlow<NextClassState> = combine(sessions, overrides, now) { list, changes, time ->
+    val breaks: StateFlow<List<BreakPeriod>> = dao.observeBreaks()
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Finished study sessions from the last 30 days. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val studyLog: StateFlow<List<StudyEntry>> = now
+        .map { it.toLocalDate() }
+        .distinctUntilChanged()
+        .flatMapLatest { today -> planner.observeStudySince(today.minusDays(30).toString()) }
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val weekTasks: StateFlow<List<PlannerTask>> = now
+        .map { it.toLocalDate() }
+        .distinctUntilChanged()
+        .flatMapLatest { today -> planner.observeTasks(today.minusDays(6).toString()) }
+        .map { rows -> rows.map { it.toDomain() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _focus = MutableStateFlow(FocusManager.load(application))
+    val focus: StateFlow<FocusSession?> = _focus.asStateFlow()
+
+    val review: StateFlow<WeeklyReviewData> = combine(
+        combine(sessions, overrides, breaks, courses) { list, changes, off, courseList ->
+            ReviewInputs(list.orEmpty(), changes, off, courseList)
+        },
+        combine(attendance, weekTasks, studyLog, now) { marks, taskList, study, time ->
+            ReviewLive(marks, taskList, study, time.toLocalDate())
+        },
+    ) { base, live ->
+        WeeklyReview.compute(
+            end = live.today,
+            sessions = base.sessions,
+            overrides = base.overrides,
+            breaks = base.breaks,
+            courses = base.courses,
+            marks = live.marks,
+            tasks = live.tasks,
+            study = live.study,
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        WeeklyReviewData(
+            from = LocalDate.now().minusDays(6),
+            to = LocalDate.now(),
+            held = 0, present = 0, absent = 0, unmarked = 0,
+            tasksDone = 0, tasksTotal = 0, studyMinutes = 0,
+            studyByCourse = emptyList(), weakest = null, nextBreak = null,
+        ),
+    )
+
+    val hero: StateFlow<NextClassState> = combine(sessions, overrides, now, breaks) { list, changes, time, off ->
         if (list == null) {
             NextClassState.NoClasses
         } else {
-            resolver(RoutineOverrides.effective(list, changes, time.toLocalDate()), time)
+            resolver(RoutineOverrides.effective(list, changes, time.toLocalDate(), off), time)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NextClassState.NoClasses)
 
@@ -164,6 +242,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             dynamicColor = preferences.dynamicColor,
             planEnabled = preferences.planReminderEnabled,
             planMinutes = preferences.planMinutes,
+            reviewEnabled = preferences.reviewEnabled,
+            reviewDay = preferences.reviewDay,
         ),
     )
     val settings: StateFlow<SettingsUiState> = _settings.asStateFlow()
@@ -253,6 +333,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Re-arms the widget alarm and the daily reminder. Cheap, so it runs on every resume. */
     fun refreshSchedule() {
+        refreshFocus()
         viewModelScope.launch(Dispatchers.Default) {
             WidgetUpdateHelper.refreshAll(getApplication())
         }
@@ -285,6 +366,70 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ---- Planner -----------------------------------------------------------------------
+
+    // ---- Breaks ------------------------------------------------------------------------
+
+    fun addBreak(name: String, start: LocalDate, end: LocalDate) {
+        val clean = name.trim()
+        if (clean.isEmpty() || end.isBefore(start)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insertBreak(BreakEntity(name = clean, startDate = start.toString(), endDate = end.toString()))
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    fun deleteBreak(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteBreak(id)
+            WidgetUpdateHelper.refreshAll(getApplication())
+        }
+    }
+
+    // ---- Study timer -------------------------------------------------------------------
+
+    fun refreshFocus() {
+        _focus.value = FocusManager.load(getApplication())
+    }
+
+    fun startFocus(courseKey: String, courseCode: String, minutes: Int) {
+        FocusManager.start(getApplication(), courseKey, courseCode, minutes)
+        refreshFocus()
+    }
+
+    fun pauseFocus() {
+        FocusManager.pause(getApplication())
+        refreshFocus()
+    }
+
+    fun resumeFocus() {
+        FocusManager.resume(getApplication())
+        refreshFocus()
+    }
+
+    fun finishFocus() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val minutes = FocusManager.finish(getApplication())
+            refreshFocus()
+            if (minutes > 0) _message.value = "Logged " + TimeFormat.duration(minutes) + " of study."
+        }
+    }
+
+    fun discardFocus() {
+        FocusManager.discard(getApplication())
+        refreshFocus()
+    }
+
+    fun setReviewEnabled(enabled: Boolean) {
+        preferences.reviewEnabled = enabled
+        _settings.update { it.copy(reviewEnabled = enabled) }
+        refreshSchedule()
+    }
+
+    fun setReviewDay(day: Int) {
+        preferences.reviewDay = day
+        _settings.update { it.copy(reviewDay = day) }
+        refreshSchedule()
+    }
 
     fun requestOpen(kind: String) {
         _openRequest.value = kind

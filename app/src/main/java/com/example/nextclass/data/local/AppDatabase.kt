@@ -16,8 +16,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SemesterEntity::class,
         TaskEntity::class,
         NoteEntity::class,
+        BreakEntity::class,
+        StudyLogEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -79,6 +81,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `breaks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `startDate` TEXT NOT NULL, `endDate` TEXT NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `study_log` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`courseKey` TEXT NOT NULL, `courseCode` TEXT NOT NULL, `date` TEXT NOT NULL, " +
+                        "`minutes` INTEGER NOT NULL)",
+                )
+            }
+        }
+
         private val FIRST_SEMESTER = object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 db.execSQL("INSERT INTO `semesters` (`id`, `name`, `active`) VALUES (1, 'Semester 1', 1)")
@@ -94,7 +110,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nextclass.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .addCallback(FIRST_SEMESTER).build().also { instance = it }
             }
     }

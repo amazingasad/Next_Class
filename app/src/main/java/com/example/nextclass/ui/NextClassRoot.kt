@@ -53,9 +53,11 @@ import com.example.nextclass.ui.screens.ImportRoutineScreen
 import com.example.nextclass.ui.screens.SettingsScreen
 import com.example.nextclass.ui.screens.WeekScreen
 import com.example.nextclass.worker.AlarmHelper
+import com.example.nextclass.ui.screens.FocusScreen
+import com.example.nextclass.ui.screens.ReviewScreen
 import com.example.nextclass.worker.NotificationHelper
 
-private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE, PLAN }
+private enum class Screen { HOME, IMPORT, SETTINGS, COURSES, WEEK, GUIDE, ATTENDANCE, PLAN, FOCUS, REVIEW }
 
 @Composable
 fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
@@ -80,6 +82,10 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     val planTasks by viewModel.tasks.collectAsStateWithLifecycle()
     val planNotes by viewModel.notes.collectAsStateWithLifecycle()
     val openRequest by viewModel.openRequest.collectAsStateWithLifecycle()
+    val breaks by viewModel.breaks.collectAsStateWithLifecycle()
+    val focus by viewModel.focus.collectAsStateWithLifecycle()
+    val studyLog by viewModel.studyLog.collectAsStateWithLifecycle()
+    val reviewData by viewModel.review.collectAsStateWithLifecycle()
     var planTab by rememberSaveable { mutableIntStateOf(0) }
     var planSheet by rememberSaveable { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(openRequest) {
@@ -97,6 +103,11 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
             "notes" -> {
                 planTab = 1
                 screen = Screen.PLAN
+            }
+            "review" -> screen = Screen.REVIEW
+            "focus" -> {
+                viewModel.refreshFocus()
+                screen = Screen.FOCUS
             }
         }
         viewModel.consumeOpenRequest()
@@ -191,6 +202,8 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
     BackHandler(enabled = screen == Screen.PLAN) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.ATTENDANCE) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.WEEK) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.FOCUS) { screen = Screen.HOME }
+    BackHandler(enabled = screen == Screen.REVIEW) { screen = Screen.HOME }
     BackHandler(enabled = screen == Screen.GUIDE) { screen = guideFrom }
     BackHandler(enabled = screen == Screen.COURSES) {
         viewModel.clearCourseScan()
@@ -284,6 +297,12 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onRequestBattery = requestBattery,
                 courses = courses,
                 onAddStudyTask = viewModel::addTask,
+                breaks = breaks,
+                studyLog = studyLog,
+                onAddBreak = viewModel::addBreak,
+                onDeleteBreak = viewModel::deleteBreak,
+                onFocus = { screen = Screen.FOCUS },
+                onReview = { screen = Screen.REVIEW },
                 onHideBatteryNotice = viewModel::hideBatteryNotice,
             )
 
@@ -318,6 +337,8 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 onDynamicColor = viewModel::setDynamicColor,
                 onPlanEnabled = viewModel::setPlanEnabled,
                 onPlanMinutes = viewModel::setPlanMinutes,
+                onReviewEnabled = viewModel::setReviewEnabled,
+                onReviewDay = viewModel::setReviewDay,
                 onShare = shareRoutine,
                 onExportBackup = { exportLauncher.launch("nextclass-backup.json") },
                 onRestoreBackup = { restoreLauncher.launch(arrayOf("*/*")) },
@@ -377,10 +398,32 @@ fun NextClassRoot(viewModel: MainViewModel = viewModel()) {
                 sessions = sessions.orEmpty(),
                 overrides = overrides,
                 marks = marks,
+                breaks = breaks,
                 now = now,
                 onBack = { screen = Screen.HOME },
                 onMark = viewModel::markAttendance,
                 onClearCourse = viewModel::clearAttendanceFor,
+            )
+
+            Screen.FOCUS -> FocusScreen(
+                courses = courses,
+                focus = focus,
+                studyLog = studyLog,
+                today = now.toLocalDate(),
+                onBack = { screen = Screen.HOME },
+                onStart = viewModel::startFocus,
+                onPause = viewModel::pauseFocus,
+                onResume = viewModel::resumeFocus,
+                onFinish = viewModel::finishFocus,
+                onDiscard = viewModel::discardFocus,
+            )
+
+            Screen.REVIEW -> ReviewScreen(
+                data = reviewData,
+                today = now.toLocalDate(),
+                onBack = { screen = Screen.HOME },
+                onOpenAttendance = { screen = Screen.ATTENDANCE },
+                onOpenFocus = { screen = Screen.FOCUS },
             )
 
             Screen.GUIDE -> ApiKeyGuideScreen(
