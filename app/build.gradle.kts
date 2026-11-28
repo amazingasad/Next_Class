@@ -104,4 +104,9 @@ dependencies {
 
     implementation(libs.security.crypto)
     implementation(libs.androidx.exifinterface)
+
+    implementation(libs.pdfbox.android)
+    implementation(libs.mlkit.text)
+
+    testImplementation(libs.junit)
 }

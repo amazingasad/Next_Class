@@ -110,6 +110,27 @@ class AppPreferences(context: Context) {
             .commit()
     }
 
+    /** 0 chooses automatically, 1 always reads offline, 2 always uses Gemini. */
+    var scanMode: Int
+        get() = prefs.getInt(KEY_SCAN_MODE, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_SCAN_MODE, value).apply()
+        }
+
+    /** 0 follows the phone, 1 is always light, 2 is always dark. Applies to the whole app. */
+    var appThemeMode: Int
+        get() = prefs.getInt(KEY_APP_THEME, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_APP_THEME, value).apply()
+        }
+
+    /** Index into the palette list: 0 Paper, 1 Forest, 2 Harbor. */
+    var paletteId: Int
+        get() = prefs.getInt(KEY_PALETTE, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_PALETTE, value).apply()
+        }
+
     var dynamicColor: Boolean
         get() = prefs.getBoolean(KEY_DYNAMIC, false)
         set(value) {
@@ -134,6 +155,9 @@ class AppPreferences(context: Context) {
         val PLAN_OPTIONS = listOf(19 * 60, 20 * 60, 21 * 60, 22 * 60)
         val LEAD_OPTIONS = listOf(15, 30, 45)
 
+        private const val KEY_SCAN_MODE = "scan_mode"
+        private const val KEY_APP_THEME = "app_theme_mode"
+        private const val KEY_PALETTE = "palette_id"
         private const val KEY_REVIEW_ENABLED = "review_enabled"
         private const val KEY_REVIEW_DAY = "review_day"
         private const val KEY_REVIEW_MINUTES = "review_minutes"

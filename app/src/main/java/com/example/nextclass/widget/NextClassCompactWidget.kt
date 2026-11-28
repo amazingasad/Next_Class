@@ -87,7 +87,7 @@ class NextClassCompactWidget : GlanceAppWidget() {
     @Composable
     private fun Content(state: NextClassState, themeMode: Int, dynamic: Boolean, status: Boolean?) {
         val widgetContext = LocalContext.current
-        val p = remember(themeMode, dynamic) { WidgetPalette(themeMode, widgetContext, dynamic) }
+        val p = WidgetPalette(themeMode, widgetContext, dynamic)
         val live = state is NextClassState.Ongoing
         val session = state.focusSession
         val openApp = actionStartActivity(Intent(widgetContext, MainActivity::class.java))

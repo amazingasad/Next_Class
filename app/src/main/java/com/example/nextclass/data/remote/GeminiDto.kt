@@ -89,6 +89,7 @@ data class ParsedSessionDto(
     val startTime: String,
     val endTime: String,
     val type: String = "LECTURE",
+    val teacher: String = "",
 )
 
 /** One course row exactly as Gemini returns it for a course list. */

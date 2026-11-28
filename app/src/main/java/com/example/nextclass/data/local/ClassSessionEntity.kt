@@ -17,6 +17,7 @@ data class ClassSessionEntity(
     val endTime: String,
     val type: String,
     @ColumnInfo(defaultValue = "1") val semesterId: Long = 1,
+    val teacher: String = "",
 )
 
 fun ClassSessionEntity.toDomain(): ClassSession = ClassSession(
@@ -28,6 +29,7 @@ fun ClassSessionEntity.toDomain(): ClassSession = ClassSession(
     startTime = startTime,
     endTime = endTime,
     type = SessionType.fromRaw(type),
+    teacher = teacher,
 )
 
 fun ClassSession.toEntity(): ClassSessionEntity = ClassSessionEntity(
@@ -38,5 +40,6 @@ fun ClassSession.toEntity(): ClassSessionEntity = ClassSessionEntity(
     room = room,
     startTime = startTime,
     endTime = endTime,
-    type = type.name
+    type = type.name,
+    teacher = teacher,
 )

@@ -376,6 +376,7 @@ class RoutineParserRepository(
                 startTime = start,
                 endTime = end,
                 type = SessionType.fromRaw(dto.type),
+                teacher = dto.teacher.trim(),
             )
         }
             .distinctBy { listOf(it.dayOfWeek, it.courseCode, it.startTime, it.endTime, it.room) }
@@ -524,6 +525,8 @@ class RoutineParserRepository(
                 "courseTitle is the full course name. Read it from the cell itself, or from any course " +
                 "list, legend or key printed on the same page that matches the course code, and copy " +
                 "it exactly. Use an empty string only when no title for that course appears anywhere. " +
+                "teacher is the teacher short form or initials printed in the cell, for example MIT or SeN / SZM, " +
+                "copied exactly, or an empty string when none is printed. " +
                 "type is LAB for lab, sessional or practical sessions, TUTORIAL for tutorials, and " +
                 "LECTURE otherwise. " +
                 "When a section or group is requested, return only sessions for that section or group " +
@@ -563,6 +566,7 @@ class RoutineParserRepository(
                     "startTime" to SchemaDto(type = "STRING", description = "24-hour HH:mm"),
                     "endTime" to SchemaDto(type = "STRING", description = "24-hour HH:mm"),
                     "type" to SchemaDto(type = "STRING", enumValues = listOf("LECTURE", "LAB", "TUTORIAL")),
+                    "teacher" to SchemaDto(type = "STRING"),
                 ),
                 required = listOf(
                     "dayOfWeek", "courseCode", "courseTitle", "room", "startTime", "endTime", "type",

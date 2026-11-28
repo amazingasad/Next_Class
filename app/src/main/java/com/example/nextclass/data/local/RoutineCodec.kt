@@ -24,6 +24,7 @@ data class BundleSession(
     val startTime: String,
     val endTime: String,
     val type: String = "LECTURE",
+    val teacher: String = "",
 )
 
 @Serializable
@@ -81,6 +82,7 @@ object RoutineCodec {
                 startTime = it.startTime,
                 endTime = it.endTime,
                 type = it.type.name,
+                teacher = it.teacher,
             )
         },
         courses = courses.map { BundleCourse(code = it.code, title = it.title) },
@@ -163,6 +165,7 @@ object RoutineCodec {
             startTime = it.startTime,
             endTime = it.endTime,
             type = SessionType.fromRaw(it.type),
+            teacher = it.teacher,
         )
     }
 

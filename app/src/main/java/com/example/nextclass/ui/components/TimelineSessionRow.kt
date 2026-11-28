@@ -172,13 +172,14 @@ fun TimelineSessionRow(
                 )
             }
             Spacer(Modifier.height(4.dp))
+            val kindText = if (session.teacher.isBlank()) session.type.name else "${session.type.name} • ${session.teacher}"
             MicroLabel(
                 text = when {
                     cancelled -> "Cancelled"
-                    !roomOverride.isNullOrBlank() -> "Room changed • ${session.type.name}"
-                    attendance == true -> "${session.type.name} • Present"
-                    attendance == false -> "${session.type.name} • Absent"
-                    else -> session.type.name
+                    !roomOverride.isNullOrBlank() -> "Room changed • $kindText"
+                    attendance == true -> "$kindText • Present"
+                    attendance == false -> "$kindText • Absent"
+                    else -> kindText
                 },
                 color = if (cancelled) extras.live else extras.muted,
             )

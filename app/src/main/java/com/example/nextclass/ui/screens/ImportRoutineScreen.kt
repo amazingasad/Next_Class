@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.example.nextclass.R
 import com.example.nextclass.domain.model.ClassSession
 import com.example.nextclass.domain.model.DayNames
+import com.example.nextclass.domain.offline.GroupKey
 import com.example.nextclass.ui.ImportUiState
 import com.example.nextclass.ui.components.EditSessionBottomSheet
 import com.example.nextclass.ui.components.Hairline
@@ -78,6 +79,8 @@ import com.example.nextclass.ui.theme.NcTheme
 fun ImportRoutineScreen(
     state: ImportUiState,
     hasApiKey: Boolean,
+    scanMode: Int,
+    onChooseGroup: (GroupKey) -> Unit,
     onBack: () -> Unit,
     onScan: (Uri, String) -> Unit,
     onUpdateDraft: (ClassSession) -> Unit,
@@ -116,16 +119,20 @@ fun ImportRoutineScreen(
         when (state) {
             ImportUiState.Idle -> PickStep(
                 hasApiKey = hasApiKey,
+                scanMode = scanMode,
                 onScan = onScan,
                 onOpenSettings = onOpenSettings,
             )
 
             ImportUiState.Scanning -> ScanningStep()
 
+            is ImportUiState.ChooseGroup -> ChooseGroupStep(groups = state.groups, onChoose = onChooseGroup)
+
             is ImportUiState.Failed -> FailedStep(message = state.message, onRetry = onReset)
 
             is ImportUiState.Review -> ReviewStep(
                 sessions = state.sessions,
+                source = state.source,
                 onUpdateDraft = onUpdateDraft,
                 onAddDraft = onAddDraft,
                 onDeleteDraft = onDeleteDraft,
@@ -138,6 +145,7 @@ fun ImportRoutineScreen(
 @Composable
 private fun PickStep(
     hasApiKey: Boolean,
+    scanMode: Int,
     onScan: (Uri, String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -159,7 +167,12 @@ private fun PickStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Choose a PDF or a photo of your class routine. Gemini reads it and you review the result before anything is saved.",
+            text = when {
+                scanMode == 1 -> "Choose a PDF or a photo of your class routine. It is read on this phone with no internet, and you review the result before anything is saved."
+                scanMode == 2 -> "Choose a PDF or a photo of your class routine. Gemini reads it and you review the result before anything is saved."
+                hasApiKey -> "Choose a PDF or a photo of your class routine. Gemini reads it when you are online, otherwise it is read on this phone. You review the result before anything is saved."
+                else -> "Choose a PDF or a photo of your class routine. It is read on this phone with no internet, and you review the result before anything is saved."
+            },
             style = NcText.Body,
             color = NcTheme.extras.muted,
         )
@@ -187,12 +200,16 @@ private fun PickStep(
             value = filter,
             onValueChange = { filter = it },
             label = "Section or group (optional)",
-            placeholder = "Section A, Group A1",
+            placeholder = "3rd year odd sem sec B",
         )
 
         if (!hasApiKey) {
             Text(
-                text = "Add a Gemini API key before scanning. The guide shows how to get one for free.",
+                text = if (scanMode == 2) {
+                    "Add a Gemini API key before scanning. The guide shows how to get one for free."
+                } else {
+                    "Optional: a free Gemini key helps with blurry photos or unusual layouts."
+                },
                 style = NcText.Body,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -205,7 +222,7 @@ private fun PickStep(
 
         PrimaryButton(
             text = "Scan routine",
-            enabled = pickedUri != null && hasApiKey,
+            enabled = pickedUri != null && (hasApiKey || scanMode != 2),
             onClick = { pickedUri?.let { onScan(it, filter) } },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -229,10 +246,51 @@ private fun ScanningStep() {
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Gemini is reading your timetable. This usually takes 10 to 30 seconds.",
+            text = "Reading your timetable. On this phone it takes a few seconds. Gemini usually takes 10 to 30.",
             style = NcText.Body,
             color = NcTheme.extras.muted,
         )
+    }
+}
+
+@Composable
+private fun ChooseGroupStep(groups: List<GroupKey>, onChoose: (GroupKey) -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        MicroLabel("Choose your section")
+        Text(
+            text = "This routine lists several sections. Tap yours and only its classes are imported.",
+            style = NcText.Body,
+            color = NcTheme.extras.muted,
+        )
+        groups.groupBy { it.year to it.semester }.forEach { (key, items) ->
+            MicroLabel(
+                text = "${items.first().label.substringBefore(',')}, ${key.second} semester",
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                items.forEach { group ->
+                    SelectPill(
+                        label = "Sec ${group.section}",
+                        selected = false,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onChoose(group)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                // Keeps pills the same width when a row has fewer sections.
+                repeat((4 - items.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
+            }
+        }
     }
 }
 
@@ -262,6 +320,7 @@ private fun FailedStep(message: String, onRetry: () -> Unit) {
 @Composable
 private fun ReviewStep(
     sessions: List<ClassSession>,
+    source: String,
     onUpdateDraft: (ClassSession) -> Unit,
     onAddDraft: (ClassSession) -> Unit,
     onDeleteDraft: (Long) -> Unit,
@@ -283,7 +342,8 @@ private fun ReviewStep(
             text = if (sessions.isEmpty()) {
                 "No classes were found. Add one manually or go back and try another file."
             } else {
-                "${sessions.size} classes found. Tap a row to edit, swipe left to delete."
+                "${sessions.size} classes found. Tap a row to edit, swipe left to delete." +
+                    if (source.isNotBlank()) " $source" else ""
             },
             style = NcText.Body,
             color = NcTheme.extras.muted,
@@ -303,9 +363,9 @@ private fun ReviewStep(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = if (issues.size == 1) {
-                            "1 row needs a check. The AI was unsure about it."
+                            "1 row needs a check. The reader was unsure about it."
                         } else {
-                            "${issues.size} rows need a check. The AI was unsure about them."
+                            "${issues.size} rows need a check. The reader was unsure about them."
                         },
                         style = NcText.Body,
                         color = MaterialTheme.colorScheme.onSurface,

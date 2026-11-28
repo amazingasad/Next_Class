@@ -108,7 +108,7 @@ class NextClassPlannerWidget : GlanceAppWidget() {
     @Composable
     private fun Content(model: Model) {
         val context = LocalContext.current
-        val p = remember(model.themeMode, model.dynamic) { WidgetPalette(model.themeMode, context, model.dynamic) }
+        val p = WidgetPalette(model.themeMode, context, model.dynamic)
         val onNotes = model.page == 0
         val open = actionStartActivity(
             Intent(context, MainActivity::class.java)

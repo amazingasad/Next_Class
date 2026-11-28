@@ -131,6 +131,14 @@ private fun HeroBody(state: NextClassState) {
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                 )
+                if (session.teacher.isNotBlank()) {
+                    Text(
+                        text = session.teacher,
+                        style = NcText.Time,
+                        color = extras.muted,
+                        maxLines = 1,
+                    )
+                }
                 if (session.courseTitle.isNotBlank()) {
                     Text(
                         text = session.courseTitle,

@@ -14,7 +14,13 @@ import com.example.nextclass.data.local.RoutineCodec
 import com.example.nextclass.data.local.RoutineBundle
 import com.example.nextclass.data.local.toDomain
 import com.example.nextclass.data.local.toEntity
+import com.example.nextclass.data.offline.OfflineRoutineReader
 import com.example.nextclass.data.remote.RoutineParserRepository
+import com.example.nextclass.domain.offline.GroupKey
+import com.example.nextclass.domain.offline.OfflineOutcome
+import com.example.nextclass.domain.offline.OfflineSelection
+import com.example.nextclass.domain.offline.TimetableGrid
+import com.example.nextclass.domain.offline.TimetableParser
 import com.example.nextclass.data.remote.UpdateChecker
 import com.example.nextclass.data.remote.UpdateState
 import com.example.nextclass.domain.model.AttendanceMark
@@ -61,7 +67,9 @@ import java.time.LocalDateTime
 sealed interface ImportUiState {
     data object Idle : ImportUiState
     data object Scanning : ImportUiState
-    data class Review(val sessions: List<ClassSession>) : ImportUiState
+    data class Review(val sessions: List<ClassSession>, val source: String = "") : ImportUiState
+    /** The offline reader found several sections and needs the user to pick one. */
+    data class ChooseGroup(val groups: List<GroupKey>) : ImportUiState
     data class Failed(val message: String) : ImportUiState
 }
 
@@ -91,6 +99,11 @@ data class SettingsUiState(
     val planMinutes: Int = AppPreferences.DEFAULT_PLAN_MINUTES,
     val reviewEnabled: Boolean = true,
     val reviewDay: Int = 5,
+    /** 0 automatic, 1 offline only, 2 Gemini only. */
+    val scanMode: Int = 0,
+    /** 0 follows the phone, 1 light, 2 dark. */
+    val themeMode: Int = 0,
+    val paletteId: Int = 0,
 )
 
 private data class ReviewInputs(
@@ -244,6 +257,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             planMinutes = preferences.planMinutes,
             reviewEnabled = preferences.reviewEnabled,
             reviewDay = preferences.reviewDay,
+            scanMode = preferences.scanMode,
+            themeMode = preferences.appThemeMode,
+            paletteId = preferences.paletteId,
         ),
     )
     val settings: StateFlow<SettingsUiState> = _settings.asStateFlow()
@@ -577,20 +593,116 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Import ------------------------------------------------------------------------
 
+    private val offlineReader = OfflineRoutineReader(application)
+    private var pendingGrid: TimetableGrid? = null
+
+    private sealed interface ScanAttempt {
+        data class Done(val sessions: List<ClassSession>, val source: String) : ScanAttempt
+        data class Pick(val grid: TimetableGrid, val groups: List<GroupKey>) : ScanAttempt
+        data class Failed(val message: String) : ScanAttempt
+    }
+
+    private fun isOnline(): Boolean {
+        val manager = getApplication<Application>().getSystemService(android.net.ConnectivityManager::class.java)
+            ?: return false
+        return try {
+            val network = manager.activeNetwork ?: return false
+            val caps = manager.getNetworkCapabilities(network) ?: return false
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (e: SecurityException) {
+            true
+        }
+    }
+
+    private suspend fun scanOffline(uri: Uri, filter: String): ScanAttempt {
+        return when (val outcome = offlineReader.read(uri)) {
+            is OfflineOutcome.NotATimetable -> ScanAttempt.Failed(outcome.reason)
+            is OfflineOutcome.Found -> when (val selection = TimetableParser.select(outcome.grid, filter)) {
+                is OfflineSelection.NeedGroup -> ScanAttempt.Pick(outcome.grid, selection.groups)
+                is OfflineSelection.Ready ->
+                    if (selection.sessions.isEmpty()) {
+                        ScanAttempt.Failed("No classes were found for " + selection.group.label + ".")
+                    } else {
+                        ScanAttempt.Done(selection.sessions, "Read on this phone. " + selection.group.label + ".")
+                    }
+            }
+        }
+    }
+
+    private suspend fun scanCloud(uri: Uri, filter: String): ScanAttempt =
+        repository.scanRoutine(uri, filter).fold(
+            onSuccess = { list -> ScanAttempt.Done(list, "Read with Gemini.") },
+            onFailure = { error -> ScanAttempt.Failed(error.message ?: "Could not read the routine.") },
+        )
+
+    /**
+     * Reads a routine. Automatic mode uses Gemini when a key is saved and the phone is online,
+     * and the on-device reader otherwise, and falls back to the other one if the first fails.
+     */
     fun scan(uri: Uri, sectionFilter: String) {
         scanJob?.cancel()
         _import.value = ImportUiState.Scanning
+        pendingGrid = null
         scanJob = viewModelScope.launch {
-            repository.scanRoutine(uri, sectionFilter).fold(
-                onSuccess = { list ->
+            val mode = preferences.scanMode
+            val hasKey = keyManager.hasKey()
+            val online = isOnline()
+            val result: ScanAttempt = when (mode) {
+                1 -> scanOffline(uri, sectionFilter)
+                2 -> when {
+                    !hasKey -> ScanAttempt.Failed("Gemini needs an API key. Add one in Settings, or switch the scan engine to Automatic.")
+                    !online -> ScanAttempt.Failed("Gemini needs an internet connection. Switch the scan engine to Automatic to read offline.")
+                    else -> scanCloud(uri, sectionFilter)
+                }
+                else -> if (hasKey && online) {
+                    val cloud = scanCloud(uri, sectionFilter)
+                    if (cloud is ScanAttempt.Failed) {
+                        val local = scanOffline(uri, sectionFilter)
+                        if (local is ScanAttempt.Failed) cloud else local
+                    } else {
+                        cloud
+                    }
+                } else {
+                    val local = scanOffline(uri, sectionFilter)
+                    if (local is ScanAttempt.Failed) {
+                        ScanAttempt.Failed(
+                            local.message + if (hasKey) " Connect to the internet to try Gemini." else " Add a free Gemini key in Settings for routines this reader cannot handle.",
+                        )
+                    } else {
+                        local
+                    }
+                }
+            }
+            when (result) {
+                is ScanAttempt.Done -> {
                     nextDraftId = 1L
-                    _import.value = ImportUiState.Review(list.map { it.copy(id = nextDraftId++) })
-                },
-                onFailure = { error ->
-                    _import.value = ImportUiState.Failed(error.message ?: "Could not read the routine.")
-                },
-            )
+                    _import.value = ImportUiState.Review(
+                        result.sessions.map { it.copy(id = nextDraftId++) },
+                        result.source,
+                    )
+                }
+                is ScanAttempt.Pick -> {
+                    pendingGrid = result.grid
+                    _import.value = ImportUiState.ChooseGroup(result.groups)
+                }
+                is ScanAttempt.Failed -> _import.value = ImportUiState.Failed(result.message)
+            }
         }
+    }
+
+    /** The user picked a section after the offline reader listed them. */
+    fun chooseGroup(group: GroupKey) {
+        val grid = pendingGrid ?: return
+        val sessions = TimetableParser.sessionsFor(grid, group)
+        if (sessions.isEmpty()) {
+            _import.value = ImportUiState.Failed("No classes were found for " + group.label + ".")
+            return
+        }
+        nextDraftId = 1L
+        _import.value = ImportUiState.Review(
+            sessions.map { it.copy(id = nextDraftId++) },
+            "Read on this phone. " + group.label + ".",
+        )
     }
 
     fun updateDraft(session: ClassSession) {
@@ -629,6 +741,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ImportUiState.Review(
                     transform(current.sessions)
                         .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime })),
+                    current.source,
                 )
             } else {
                 current
@@ -689,6 +802,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setDynamicColor(enabled: Boolean) {
         preferences.dynamicColor = enabled
         _settings.update { it.copy(dynamicColor = enabled) }
+        viewModelScope.launch { WidgetUpdateHelper.updateWidgets(getApplication()) }
+    }
+
+    fun setScanMode(mode: Int) {
+        preferences.scanMode = mode
+        _settings.update { it.copy(scanMode = mode) }
+    }
+
+    fun setThemeMode(mode: Int) {
+        preferences.appThemeMode = mode
+        _settings.update { it.copy(themeMode = mode) }
+    }
+
+    fun setPalette(id: Int) {
+        preferences.paletteId = id
+        _settings.update { it.copy(paletteId = id) }
         viewModelScope.launch { WidgetUpdateHelper.updateWidgets(getApplication()) }
     }
 

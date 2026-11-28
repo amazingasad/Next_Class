@@ -21,6 +21,8 @@ data class ClassSession(
     val startTime: String,
     val endTime: String,
     val type: SessionType = SessionType.LECTURE,
+    /** Teacher short form as printed in the routine, for example MIT or SeN / SZM. Blank when unknown. */
+    val teacher: String = "",
 ) {
     val startLocalTime: LocalTime get() = LocalTime.parse(startTime)
     val endLocalTime: LocalTime get() = LocalTime.parse(endTime)

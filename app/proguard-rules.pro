@@ -28,3 +28,10 @@
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn com.google.crypto.tink.**
 -dontwarn okhttp3.internal.platform.**
+
+# On-device routine reading: PDF text layer and OCR
+-keep class com.tom_roush.pdfbox.** { *; }
+-dontwarn com.tom_roush.pdfbox.**
+-dontwarn com.gemalto.jp2.**
+-dontwarn org.bouncycastle.**
+-dontwarn com.google.mlkit.**

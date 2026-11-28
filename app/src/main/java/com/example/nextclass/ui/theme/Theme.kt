@@ -1,6 +1,8 @@
 package com.example.nextclass.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -10,10 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.platform.LocalContext
-import android.os.Build
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 @Immutable
 class NcExtras(
@@ -35,112 +37,124 @@ object NcTheme {
         get() = LocalNcExtras.current
 }
 
-private val LightScheme = lightColorScheme(
-    primary = NcPalette.SignalVermilion,
-    onPrimary = Color.White,
-    primaryContainer = NcPalette.SunkenLight,
-    onPrimaryContainer = NcPalette.InkLight,
-    secondary = NcPalette.SageLight,
-    onSecondary = Color.White,
-    secondaryContainer = NcPalette.SunkenLight,
-    onSecondaryContainer = NcPalette.InkLight,
-    tertiary = NcPalette.SageLight,
-    onTertiary = Color.White,
-    tertiaryContainer = NcPalette.SunkenLight,
-    onTertiaryContainer = NcPalette.InkLight,
-    background = NcPalette.OffWhite,
-    onBackground = NcPalette.InkLight,
-    surface = NcPalette.PureWhite,
-    onSurface = NcPalette.InkLight,
-    surfaceVariant = NcPalette.SunkenLight,
-    onSurfaceVariant = NcPalette.MutedLight,
-    surfaceTint = Color.Transparent,
-    inverseSurface = NcPalette.InkLight,
-    inverseOnSurface = NcPalette.OffWhite,
-    error = NcPalette.ErrorLight,
-    onError = Color.White,
-    errorContainer = Color(0xFFFDECEA),
-    onErrorContainer = Color(0xFF7A1710),
-    outline = Color(0xFFA3A39D),
-    outlineVariant = NcPalette.LineLight,
-    scrim = Color.Black,
-    surfaceBright = NcPalette.PureWhite,
-    surfaceDim = Color(0xFFE9E9E5),
-    surfaceContainerLowest = NcPalette.PureWhite,
-    surfaceContainerLow = NcPalette.PureWhite,
-    surfaceContainer = NcPalette.PureWhite,
-    surfaceContainerHigh = NcPalette.SunkenLight,
-    surfaceContainerHighest = NcPalette.SunkenLight,
-)
+private fun schemeFor(t: Tones, dark: Boolean): ColorScheme {
+    val error = if (dark) NcPalettes.ErrorDark else NcPalettes.ErrorLight
+    val onError = if (dark) t.base else Color.White
+    return if (dark) {
+        darkColorScheme(
+            primary = t.accent,
+            onPrimary = t.onAccent,
+            primaryContainer = t.sunken,
+            onPrimaryContainer = t.ink,
+            secondary = t.muted,
+            onSecondary = t.base,
+            secondaryContainer = t.sunken,
+            onSecondaryContainer = t.ink,
+            tertiary = t.muted,
+            onTertiary = t.base,
+            tertiaryContainer = t.sunken,
+            onTertiaryContainer = t.ink,
+            background = t.base,
+            onBackground = t.ink,
+            surface = t.surface,
+            onSurface = t.ink,
+            surfaceVariant = t.sunken,
+            onSurfaceVariant = t.muted,
+            surfaceTint = Color.Transparent,
+            inverseSurface = t.ink,
+            inverseOnSurface = t.base,
+            error = error,
+            onError = onError,
+            errorContainer = Color(0xFF3B1512),
+            onErrorContainer = Color(0xFFFDECEA),
+            outline = t.muted,
+            outlineVariant = t.line,
+            scrim = Color.Black,
+            surfaceBright = t.sunken,
+            surfaceDim = t.base,
+            surfaceContainerLowest = t.base,
+            surfaceContainerLow = t.surface,
+            surfaceContainer = t.surface,
+            surfaceContainerHigh = t.sunken,
+            surfaceContainerHighest = t.sunken,
+        )
+    } else {
+        lightColorScheme(
+            primary = t.accent,
+            onPrimary = t.onAccent,
+            primaryContainer = t.sunken,
+            onPrimaryContainer = t.ink,
+            secondary = t.muted,
+            onSecondary = Color.White,
+            secondaryContainer = t.sunken,
+            onSecondaryContainer = t.ink,
+            tertiary = t.muted,
+            onTertiary = Color.White,
+            tertiaryContainer = t.sunken,
+            onTertiaryContainer = t.ink,
+            background = t.base,
+            onBackground = t.ink,
+            surface = t.surface,
+            onSurface = t.ink,
+            surfaceVariant = t.sunken,
+            onSurfaceVariant = t.muted,
+            surfaceTint = Color.Transparent,
+            inverseSurface = t.ink,
+            inverseOnSurface = t.base,
+            error = error,
+            onError = onError,
+            errorContainer = Color(0xFFFDECEA),
+            onErrorContainer = Color(0xFF7A1710),
+            outline = t.muted,
+            outlineVariant = t.line,
+            scrim = Color.Black,
+            surfaceBright = t.surface,
+            surfaceDim = t.sunken,
+            surfaceContainerLowest = t.base,
+            surfaceContainerLow = t.surface,
+            surfaceContainer = t.surface,
+            surfaceContainerHigh = t.sunken,
+            surfaceContainerHighest = t.sunken,
+        )
+    }
+}
 
-private val DarkScheme = darkColorScheme(
-    primary = NcPalette.SignalVermilion,
-    onPrimary = Color.White,
-    primaryContainer = NcPalette.SunkenDark,
-    onPrimaryContainer = NcPalette.InkDark,
-    secondary = NcPalette.SageDark,
-    onSecondary = NcPalette.Obsidian,
-    secondaryContainer = NcPalette.SunkenDark,
-    onSecondaryContainer = NcPalette.InkDark,
-    tertiary = NcPalette.SageDark,
-    onTertiary = NcPalette.Obsidian,
-    tertiaryContainer = NcPalette.SunkenDark,
-    onTertiaryContainer = NcPalette.InkDark,
-    background = NcPalette.Obsidian,
-    onBackground = NcPalette.InkDark,
-    surface = NcPalette.Charcoal,
-    onSurface = NcPalette.InkDark,
-    surfaceVariant = NcPalette.SunkenDark,
-    onSurfaceVariant = NcPalette.MutedDark,
-    surfaceTint = Color.Transparent,
-    inverseSurface = NcPalette.InkDark,
-    inverseOnSurface = NcPalette.Obsidian,
-    error = NcPalette.ErrorDark,
-    onError = NcPalette.Obsidian,
-    errorContainer = Color(0xFF3B1512),
-    onErrorContainer = Color(0xFFFDECEA),
-    outline = Color(0xFF6E6E76),
-    outlineVariant = NcPalette.LineDark,
-    scrim = Color.Black,
-    surfaceBright = NcPalette.SunkenDark,
-    surfaceDim = NcPalette.Obsidian,
-    surfaceContainerLowest = NcPalette.Obsidian,
-    surfaceContainerLow = NcPalette.Charcoal,
-    surfaceContainer = NcPalette.Charcoal,
-    surfaceContainerHigh = NcPalette.SunkenDark,
-    surfaceContainerHighest = NcPalette.SunkenDark,
-)
-
+/**
+ * @param themeMode 0 follows the phone, 1 is always light, 2 is always dark.
+ * @param paletteId index into [NcPalettes.all].
+ * @param dynamicColor use Material You colors from the wallpaper instead of the palette.
+ */
 @Composable
 fun NextClassTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: Int = 0,
+    paletteId: Int = 0,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val dark = resolveDark(themeMode, isSystemInDarkTheme())
     val useDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val tones = remember(paletteId, dark) { NcPalettes.tones(paletteId, dark) }
     val scheme = when {
-        useDynamic && darkTheme -> dynamicDarkColorScheme(context)
+        useDynamic && dark -> dynamicDarkColorScheme(context)
         useDynamic -> dynamicLightColorScheme(context)
-        darkTheme -> DarkScheme
-        else -> LightScheme
+        else -> remember(tones, dark) { schemeFor(tones, dark) }
     }
     val extras = if (useDynamic) {
         NcExtras(
             live = scheme.primary,
             liveText = scheme.primary,
-            upcoming = scheme.tertiary,
+            upcoming = scheme.onSurface,
             hairline = scheme.outlineVariant.copy(alpha = 0.6f),
             muted = scheme.onSurfaceVariant,
         )
     } else {
         NcExtras(
-            live = NcPalette.SignalVermilion,
-            liveText = if (darkTheme) NcPalette.VermilionTextDark else NcPalette.VermilionTextLight,
-            upcoming = if (darkTheme) NcPalette.SageDark else NcPalette.SageLight,
-            // 1dp hairline: outlineVariant at 35% alpha.
-            hairline = scheme.outlineVariant.copy(alpha = 0.35f),
-            muted = scheme.onSurfaceVariant,
+            live = tones.accent,
+            liveText = tones.accentText,
+            upcoming = tones.ink,
+            hairline = tones.line,
+            muted = tones.muted,
         )
     }
     CompositionLocalProvider(LocalNcExtras provides extras) {

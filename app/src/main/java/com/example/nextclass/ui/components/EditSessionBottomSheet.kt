@@ -60,6 +60,7 @@ fun EditSessionBottomSheet(
     var code by rememberSaveable(initial?.id) { mutableStateOf(initial?.courseCode.orEmpty()) }
     var title by rememberSaveable(initial?.id) { mutableStateOf(initial?.courseTitle.orEmpty()) }
     var room by rememberSaveable(initial?.id) { mutableStateOf(initial?.room.orEmpty()) }
+    var teacher by rememberSaveable(initial?.id) { mutableStateOf(initial?.teacher.orEmpty()) }
     var start by rememberSaveable(initial?.id) { mutableStateOf(TimeFormat.clock12(initial?.startTime ?: "09:00")) }
     var end by rememberSaveable(initial?.id) { mutableStateOf(TimeFormat.clock12(initial?.endTime ?: "10:00")) }
     var type by rememberSaveable(initial?.id) { mutableStateOf((initial?.type ?: SessionType.LECTURE).name) }
@@ -137,6 +138,12 @@ fun EditSessionBottomSheet(
                 label = "Room",
                 placeholder = "Room 304",
             )
+            NcTextField(
+                value = teacher,
+                onValueChange = { teacher = it },
+                label = "Teacher (short form)",
+                placeholder = "MIT",
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 NcTextField(
                     value = start,
@@ -197,6 +204,7 @@ fun EditSessionBottomSheet(
                                 courseCode = code.trim().uppercase(),
                                 courseTitle = title.trim(),
                                 room = room.trim(),
+                                teacher = teacher.trim(),
                                 startTime = normalizedStart.orEmpty(),
                                 endTime = normalizedEnd.orEmpty(),
                                 type = SessionType.fromRaw(type),

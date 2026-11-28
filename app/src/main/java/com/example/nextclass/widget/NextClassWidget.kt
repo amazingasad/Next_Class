@@ -138,9 +138,7 @@ class NextClassWidget : GlanceAppWidget() {
         val wide = LocalSize.current.width >= WIDE_BREAKPOINT
         val live = model.state is NextClassState.Ongoing
         val widgetContext = LocalContext.current
-        val p = remember(model.themeMode, model.dynamic) {
-            WidgetPalette(model.themeMode, widgetContext, model.dynamic)
-        }
+        val p = WidgetPalette(model.themeMode, widgetContext, model.dynamic)
         val openApp = actionStartActivity(Intent(widgetContext, MainActivity::class.java))
 
         // Outer box paints the 1dp hairline, inner box paints the surface.
@@ -312,11 +310,14 @@ class NextClassWidget : GlanceAppWidget() {
                             style = TextStyle(color = secondary, fontSize = 11.sp),
                         )
                     }
+                    val roomLine = listOf(session.room.uppercase(), session.teacher)
+                        .filter { it.isNotBlank() }
+                        .joinToString("  \u2022  ")
                     Text(
                         text = when (status) {
-                            true -> session.room.uppercase() + "  \u2022  PRESENT"
-                            false -> session.room.uppercase() + "  \u2022  ABSENT"
-                            null -> session.room.uppercase()
+                            true -> roomLine + "  \u2022  PRESENT"
+                            false -> roomLine + "  \u2022  ABSENT"
+                            null -> roomLine
                         },
                         maxLines = 1,
                         style = TextStyle(color = secondary, fontSize = 11.sp),

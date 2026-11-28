@@ -52,6 +52,7 @@ import com.example.nextclass.ui.components.PrimaryButton
 import com.example.nextclass.ui.components.SecondaryButton
 import com.example.nextclass.ui.components.SelectPill
 import com.example.nextclass.ui.components.NcTextField
+import com.example.nextclass.ui.theme.NcPalettes
 import com.example.nextclass.ui.theme.NcText
 import com.example.nextclass.ui.theme.NcTheme
 
@@ -74,6 +75,9 @@ fun SettingsScreen(
     onDynamicColor: (Boolean) -> Unit,
     onPlanEnabled: (Boolean) -> Unit,
     onPlanMinutes: (Int) -> Unit,
+    onScanMode: (Int) -> Unit,
+    onThemeMode: (Int) -> Unit,
+    onPalette: (Int) -> Unit,
     onReviewEnabled: (Boolean) -> Unit,
     onReviewDay: (Int) -> Unit,
     onShare: () -> Unit,
@@ -127,6 +131,34 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // ---- Scan engine ----
+            MicroLabel("Routine scan engine")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                listOf("Automatic" to 0, "Offline" to 1, "Gemini" to 2).forEach { (label, mode) ->
+                    SelectPill(
+                        label = label,
+                        selected = state.scanMode == mode,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onScanMode(mode)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Text(
+                text = when (state.scanMode) {
+                    1 -> "Always reads on this phone. No internet and no key needed. Best for the university PDF."
+                    2 -> "Always uses Gemini and needs a saved key and internet. Best for blurry photos."
+                    else -> "Uses Gemini when a key is saved and you are online. Otherwise it reads on this phone, and it switches to the other engine if one fails."
+                },
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
+
+            Spacer(Modifier.height(4.dp))
+            Hairline()
+
             // ---- Gemini key ----
             MicroLabel("Gemini API key")
             Text(
@@ -362,7 +394,39 @@ fun SettingsScreen(
             Hairline()
 
             // ---- Appearance ----
-            MicroLabel("Appearance")
+            MicroLabel("Mode")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                listOf("System" to 0, "Light" to 1, "Dark" to 2).forEach { (label, mode) ->
+                    SelectPill(
+                        label = label,
+                        selected = state.themeMode == mode,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onThemeMode(mode)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            MicroLabel("Palette")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
+                NcPalettes.all.forEachIndexed { index, spec ->
+                    SelectPill(
+                        label = spec.name,
+                        selected = state.paletteId == index,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onPalette(index)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Text(
+                text = "Each palette is one calm base color for about 70 percent of the screen, a second tone for about 25 percent, and a single accent for the remaining 5 percent.",
+                style = NcText.Body,
+                color = NcTheme.extras.muted,
+            )
             val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             Row(Modifier.fillMaxWidth(), horizontalArrangement = PillSpacing) {
                 SelectPill(
@@ -386,7 +450,7 @@ fun SettingsScreen(
             }
             Text(
                 text = if (dynamicSupported) {
-                    "NextClass keeps the warm off-white, obsidian and vermilion look. Material You takes its colors from your wallpaper, in the app and on both widgets."
+                    "NextClass uses the palette above. Material You takes its colors from your wallpaper instead, in the app and on both widgets."
                 } else {
                     "Material You needs Android 12 or newer."
                 },
