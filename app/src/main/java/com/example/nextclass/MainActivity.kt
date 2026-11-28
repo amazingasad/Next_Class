@@ -8,14 +8,11 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nextclass.ui.MainViewModel
 import com.example.nextclass.ui.NextClassRoot
 import com.example.nextclass.ui.theme.NextClassTheme
-import com.example.nextclass.ui.theme.resolveDark
 
 class MainActivity : ComponentActivity() {
 
@@ -54,19 +51,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
-            val dark = resolveDark(settings.themeMode, isSystemInDarkTheme())
-            DisposableEffect(dark) {
-                enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-                    navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-                )
-                onDispose { }
-            }
-            NextClassTheme(
-                themeMode = settings.themeMode,
-                paletteId = settings.paletteId,
-                dynamicColor = settings.dynamicColor,
-            ) {
+            NextClassTheme(dynamicColor = settings.dynamicColor) {
                 NextClassRoot(viewModel)
             }
         }

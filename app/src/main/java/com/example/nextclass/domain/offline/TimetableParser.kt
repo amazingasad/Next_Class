@@ -72,7 +72,7 @@ object TimetableParser {
         if (groups.isEmpty()) {
             return OfflineOutcome.NotATimetable("No year, semester and section rows were found.")
         }
-        return OfflineOutcome.Found(TimetableGrid(groups.toList(), cells, warnings.distinct()))
+        return OfflineOutcome.Found(TimetableGrid(groups.toList(), cells, warnings.distinct(), findTitles(pages)))
     }
 
     /** Picks the rows that match [filter]. With several candidates the caller must ask the user. */
@@ -88,7 +88,35 @@ object TimetableParser {
         for (cell in grid.cells.filter { it.group == group }) {
             sessions += sessionsOfCell(cell)
         }
-        return merge(sessions).sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }, { it.courseCode }))
+        return merge(sessions)
+            .map { if (it.courseTitle.isBlank()) it.copy(courseTitle = grid.titles[it.courseCode].orEmpty()) else it }
+            .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }, { it.courseCode }))
+    }
+
+    // ---- Course title list ---------------------------------------------------------
+
+    private val TITLE_LINE = Regex("^([A-Za-z]{2,5}\\s?-?\\d{3,4}[A-Za-z]?)\\s*[-:.)]?\\s+(\\p{L}[\\p{L}0-9 &,'()-]{4,})$")
+
+    /**
+     * Looks for printed "CSE 3101  Software Engineering" lines. Timetable cells never carry a title on the
+     * same line as the code, so a hit with a real word after the code is a course list entry.
+     */
+    private fun findTitles(pages: List<OfflinePage>): Map<String, String> {
+        val titles = LinkedHashMap<String, String>()
+        for (page in pages) {
+            for (line in lineClusters(page.words)) {
+                val text = line.joinToString(" ") { it.text }.replace(Regex("\\s+"), " ").trim()
+                val match = TITLE_LINE.matchEntire(text) ?: continue
+                val title = match.groupValues[2].trim()
+                val words = title.split(' ')
+                val hasWord = words.any { w -> w.length >= 3 && w.any { it.isLowerCase() } }
+                val hasSecondCode = words.any { CODE.matches(it) } ||
+                    Regex("[A-Za-z]{2,5}\\s?-?\\d{3,4}").containsMatchIn(title)
+                if (!hasWord || hasSecondCode) continue
+                titles.putIfAbsent(CourseCodes.pretty(match.groupValues[1].trim()), title)
+            }
+        }
+        return titles
     }
 
     // ---- Headers -----------------------------------------------------------------------

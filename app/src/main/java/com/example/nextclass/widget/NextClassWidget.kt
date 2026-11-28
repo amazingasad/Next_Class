@@ -138,7 +138,9 @@ class NextClassWidget : GlanceAppWidget() {
         val wide = LocalSize.current.width >= WIDE_BREAKPOINT
         val live = model.state is NextClassState.Ongoing
         val widgetContext = LocalContext.current
-        val p = WidgetPalette(model.themeMode, widgetContext, model.dynamic)
+        val p = remember(model.themeMode, model.dynamic) {
+            WidgetPalette(model.themeMode, widgetContext, model.dynamic)
+        }
         val openApp = actionStartActivity(Intent(widgetContext, MainActivity::class.java))
 
         // Outer box paints the 1dp hairline, inner box paints the surface.

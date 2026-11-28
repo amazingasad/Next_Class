@@ -78,6 +78,8 @@ class TimetableGrid(
     val cells: List<OfflineCell>,
     /** Things the reader could not make sense of, for the review screen. */
     val warnings: List<String>,
+    /** Course titles from a code-and-title list printed on the page, keyed by course code. */
+    val titles: Map<String, String> = emptyMap(),
 )
 
 sealed interface OfflineOutcome {

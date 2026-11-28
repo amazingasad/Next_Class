@@ -43,7 +43,7 @@ These are design previews of the main screens, drawn to match the app's layout a
 - **Routine import.** Pick a PDF or image (JPG/PNG) of your timetable. PDFs are rendered page by page at high resolution with `PdfRenderer`. An optional section or group filter (for example `Section A, Group A1`) isolates your classes from multi-section timetables.
 - **Offline reading.** PDFs with a text layer are read on the phone with PdfBox-Android, and photos or scanned pages with ML Kit text recognition. A grid parser finds days, periods, merged cells, rooms and teacher initials (for example SeN, MIT) and filters by year, odd or even semester and section. If a PDF holds several sections, you pick yours.
 - **Scan engine.** Settings offers Automatic, Offline and Gemini. Automatic uses Gemini when a key is saved and you are online, otherwise it reads offline, and it falls back to the other engine if one fails.
-- **Themes.** System, Light and Dark modes with three palettes (Paper, Forest, Harbor), each about 70 percent base, 25 percent surface and 5 percent accent. Widgets follow the palette.
+- **Themes.** The warm off-white, obsidian and vermilion look, with an optional Material You mode.
 - **AI extraction.** The pages are sent to the Gemini API (`gemini-3.8-flash`, falling back to `gemini-2.5-flash`) with a strict JSON response schema. Merged lab cells span from the first start time to the last end time, and break rows are ignored.
 - **Review before saving.** Parsed classes are grouped by day. Tap a row to edit room or time, swipe to delete a wrong entry, or add a class manually.
 - **Full-day widget.** The home screen widget lists every class of the day:
