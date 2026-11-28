@@ -48,6 +48,11 @@ These are design previews of the main screens, drawn to match the app's layout a
   - classes that already finished are faded
   - once the last class is over, the widget shows the next scheduled day
 - **Study suggestions.** The Today screen looks at the free time on the selected day. On an off day it suggests several study blocks. On a class day it suggests one or two blocks in the longest gaps, preferring courses you just had or will have soon. Tap Add task to put a block on your to-do list.
+- **Breaks.** Add a break such as an Eid holiday or exam week from the Today menu. Classes inside it are hidden, skipped in attendance, left out of the widgets and reminders, and the day is treated as free for study suggestions.
+- **Study timer.** Pick a course and a length, start a countdown, and it keeps running with the app closed. A notification tells you when it ends and the time is logged per course.
+- **Weekly review.** A once-a-week notification (Friday at 6:00 PM by default, changeable in Settings) and a review screen: classes attended, tasks done, study time per course, and the course with the lowest attendance.
+- **Course marks.** Each course gets a small monochrome mark on the timeline, so you can tell courses apart without colours.
+- **Widget study line.** The planner widget shows your next study suggestion, and hides it once you have added it as a task.
 - **Compact widget.** A one-row widget, "NextClass (compact)", that shows only the ongoing or next class.
 - **Widget theme.** Follow the phone, or force light or dark, in Settings.
 - **12-hour time.** Times show as `09:00 AM` everywhere, and you can type times as `9:00 AM`, `2:30 pm` or `14:30`.
